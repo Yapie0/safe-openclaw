@@ -841,14 +841,58 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
       if (data.token) {
         localStorage.setItem('openclaw_token', data.token);
       }
-      showMsg('Password set! Redirecting…', 'success');
-      setTimeout(() => { window.location.href = '/'; }, 800);
+      form.style.display = 'none';
+      msgEl.innerHTML = '<strong>Password set! Encrypting your API tokens…</strong><br><br>' +
+        'The gateway will restart automatically to apply encryption.<br><br>' +
+        'If it does not restart, run:<br>' +
+        '<code style="display:block;margin-top:0.5rem;padding:0.5rem 0.75rem;background:rgba(15,10,30,0.6);border-radius:6px;font-size:0.85rem;color:#a78bfa;">openclaw gateway stop && openclaw gateway run</code>' +
+        '<button id="checkRestartBtn" class="btn-primary" style="margin-top:1.25rem;" onclick="checkRestart()">Verify &amp; continue</button>' +
+        '<p id="restartStatus" style="margin-top:0.75rem;font-size:0.85rem;color:rgba(148,163,184,0.8);display:none;"></p>';
+      msgEl.className = 'msg success';
+      msgEl.style.display = '';
     } catch (err) {
       showMsg('Network error: ' + err, 'error');
       btn.disabled = false;
       btn.textContent = 'Set password & continue';
     }
   });
+
+  let restartCheckInterval = null;
+  window.checkRestart = function() {
+    const btn = document.getElementById('checkRestartBtn');
+    const status = document.getElementById('restartStatus');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    status.style.display = '';
+    status.style.color = 'rgba(148,163,184,0.8)';
+    status.textContent = 'Waiting for gateway to restart…';
+    let attempts = 0;
+    const maxAttempts = 30;
+    if (restartCheckInterval) clearInterval(restartCheckInterval);
+    restartCheckInterval = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch('/api/safe/auth-status', { signal: AbortSignal.timeout(3000) });
+        if (r.ok) {
+          clearInterval(restartCheckInterval);
+          status.style.color = '#4ade80';
+          status.textContent = 'Gateway is running! Redirecting…';
+          btn.textContent = 'OK';
+          setTimeout(() => { window.location.href = '/'; }, 1000);
+          return;
+        }
+      } catch {}
+      if (attempts >= maxAttempts) {
+        clearInterval(restartCheckInterval);
+        status.style.color = '#f87171';
+        status.textContent = 'Gateway did not respond. Please restart manually.';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      } else {
+        status.textContent = 'Waiting for gateway to restart… (' + attempts + '/' + maxAttempts + ')';
+      }
+    }, 2000);
+  };
 </script>
 </body>
 </html>
