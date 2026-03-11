@@ -47,6 +47,8 @@ export async function resolveGatewayRuntimeConfig(params: {
   openResponsesEnabled?: boolean;
   auth?: GatewayAuthConfig;
   tailscale?: GatewayTailscaleConfig;
+  /** safe-openclaw: skip auth assertions when in first-time setup mode. */
+  needsSetup?: boolean;
 }): Promise<GatewayRuntimeConfig> {
   const bindMode = params.bind ?? params.cfg.gateway?.bind ?? "loopback";
   const customBindHost = params.cfg.gateway?.customBindHost;
@@ -121,7 +123,10 @@ export async function resolveGatewayRuntimeConfig(params: {
   const dangerouslyAllowHostHeaderOriginFallback =
     params.cfg.gateway?.controlUi?.dangerouslyAllowHostHeaderOriginFallback === true;
 
-  assertGatewayAuthConfigured(resolvedAuth, params.cfg.gateway?.auth);
+  // safe-openclaw: skip auth assertion in setup mode (no password yet)
+  if (!params.needsSetup) {
+    assertGatewayAuthConfigured(resolvedAuth, params.cfg.gateway?.auth);
+  }
   if (tailscaleMode === "funnel" && authMode !== "password") {
     throw new Error(
       "tailscale funnel requires gateway auth mode=password (set gateway.auth.password or OPENCLAW_GATEWAY_PASSWORD)",

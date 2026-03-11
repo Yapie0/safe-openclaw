@@ -375,17 +375,12 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
     );
   }
   if (resolvedAuthMode === "password" && !passwordConfigured) {
-    defaultRuntime.error(
-      [
-        "Gateway auth is set to password, but no password is configured.",
-        "Set gateway.auth.password (or OPENCLAW_GATEWAY_PASSWORD), or pass --password.",
-        ...authHints,
-      ]
-        .filter(Boolean)
-        .join("\n"),
+    // safe-openclaw: allow startup without password — enters setup mode
+    gatewayLog.warn(
+      "⚠️  safe-openclaw: Password mode is configured but no password is set. " +
+        "The gateway will start in setup mode. " +
+        "Open http://localhost:<port>/setup from this machine to set a password.",
     );
-    defaultRuntime.exit(1);
-    return;
   }
   if (resolvedAuthMode === "none") {
     gatewayLog.warn(

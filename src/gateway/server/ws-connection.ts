@@ -8,6 +8,7 @@ import { truncateUtf16Safe } from "../../utils.js";
 import { isWebchatClient } from "../../utils/message-channel.js";
 import type { AuthRateLimiter } from "../auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "../auth.js";
+import { hasValidSession } from "../safe-setup-handler.js";
 import { isLoopbackAddress } from "../net.js";
 import { getHandshakeTimeoutMs } from "../server-constants.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "../server-methods/types.js";
@@ -72,6 +73,8 @@ export type GatewayWsSharedHandlerParams = {
   browserRateLimiter?: AuthRateLimiter;
   gatewayMethods: string[];
   events: string[];
+  /** safe-openclaw: HMAC secret for verifying browser session tokens on WS upgrade. */
+  sessionSecret?: string;
 };
 
 export type AttachGatewayWsConnectionHandlerParams = GatewayWsSharedHandlerParams & {
@@ -113,6 +116,13 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
   const originCheckMetrics: WsOriginCheckMetrics = { hostHeaderFallbackAccepted: 0 };
 
   wss.on("connection", (socket, upgradeReq) => {
+    // safe-openclaw: if the upgrade request carries a valid session cookie,
+    // bypass password/token auth for this WS connection.
+    const effectiveAuth =
+      params.sessionSecret && hasValidSession(upgradeReq, params.sessionSecret)
+        ? { ...resolvedAuth, mode: "none" as const }
+        : resolvedAuth;
+
     let client: GatewayWsClient | null = null;
     let closed = false;
     const openedAt = Date.now();
@@ -288,7 +298,7 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
       requestUserAgent,
       canvasHostUrl,
       connectNonce,
-      resolvedAuth,
+      resolvedAuth: effectiveAuth,
       rateLimiter,
       browserRateLimiter,
       gatewayMethods,

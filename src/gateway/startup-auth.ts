@@ -264,8 +264,11 @@ export async function ensureGatewayStartupAuth(params: {
   // enter setup mode instead of silently auto-generating a token.
   const isDefaultTokenMode =
     resolved.mode === "token" && (resolved.token?.trim().length ?? 0) === 0;
-  if (isDefaultTokenMode && resolved.modeSource === "default") {
-    // No explicit auth configured — require first-time password setup.
+  // safe-openclaw: password mode with no password also needs first-time setup.
+  const isPasswordModeNoPassword =
+    resolved.mode === "password" && !resolved.password;
+  if ((isDefaultTokenMode && resolved.modeSource === "default") || isPasswordModeNoPassword) {
+    // No usable auth configured — require first-time password setup.
     assertHooksTokenSeparateFromGatewayAuth({ cfg: params.cfg, auth: resolved });
     return {
       cfg: params.cfg,

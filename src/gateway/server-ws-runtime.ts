@@ -34,6 +34,7 @@ export function attachGatewayWsHandlers(params: GatewayWsRuntimeParams) {
     browserRateLimiter: params.browserRateLimiter,
     gatewayMethods: params.gatewayMethods,
     events: params.events,
+    sessionSecret: params.sessionSecret,
     logGateway: params.logGateway,
     logHealth: params.logHealth,
     logWsControl: params.logWsControl,

@@ -509,6 +509,7 @@ export async function startGatewayServer(
     openResponsesEnabled: opts.openResponsesEnabled,
     auth: opts.auth,
     tailscale: opts.tailscale,
+    needsSetup,
   });
   const {
     bindHost,
@@ -892,6 +893,7 @@ export async function startGatewayServer(
     canvasHostEnabled: Boolean(canvasHost),
     canvasHostServerPort,
     resolvedAuth,
+    sessionSecret,
     rateLimiter: authRateLimiter,
     browserRateLimiter: browserAuthRateLimiter,
     gatewayMethods,

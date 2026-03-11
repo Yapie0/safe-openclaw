@@ -179,6 +179,24 @@
   height: 6px;
 }
 
+.topbar-status .logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.topbar-status .logout-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
 .topbar-status .theme-toggle {
   --theme-item: 24px;
   --theme-gap: 2px;

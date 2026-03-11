@@ -23,9 +23,11 @@ import { issueSessionToken, verifySessionToken } from "./safe-session.js";
 
 const SAFE_SETUP_PATH = "/api/safe/setup";
 const SAFE_LOGIN_PATH = "/api/safe/login";
+const SAFE_LOGOUT_PATH = "/api/safe/logout";
 const SAFE_RESET_PATH = "/api/safe/reset-password";
 const SAFE_AUTH_STATUS_PATH = "/api/safe/auth-status";
 const SAFE_SETUP_PAGE_PATH = "/setup";
+const SAFE_RESET_PAGE_PATH = "/reset-password";
 const SESSION_COOKIE_NAME = "openclaw_session";
 const SESSION_TTL_SECONDS = 3 * 24 * 60 * 60;
 
@@ -122,9 +124,16 @@ export async function handleSafeAuthGate(
 
   // Safe API endpoints handle their own auth
   if (pathname === SAFE_SETUP_PATH || pathname === SAFE_LOGIN_PATH ||
-      pathname === SAFE_RESET_PATH || pathname === SAFE_AUTH_STATUS_PATH ||
-      pathname === SAFE_SETUP_PAGE_PATH) {
+      pathname === SAFE_LOGOUT_PATH || pathname === SAFE_RESET_PATH ||
+      pathname === SAFE_AUTH_STATUS_PATH || pathname === SAFE_SETUP_PAGE_PATH ||
+      pathname === SAFE_RESET_PAGE_PATH) {
     return handleSafeEndpoint(req, res, pathname, method, isLocal, opts);
+  }
+
+  // ── Check session token (applies to both setup and normal mode) ──
+  const token = getSessionToken(req);
+  if (token && verifySessionToken(opts.sessionSecret, token)) {
+    return false; // Authenticated — proceed
   }
 
   // ── Setup mode: password not configured yet ──
@@ -145,12 +154,6 @@ export async function handleSafeAuthGate(
     }
     // Local non-browser → let through (CLI tools, etc.)
     return false;
-  }
-
-  // ── Password mode: check session token ──
-  const token = getSessionToken(req);
-  if (token && verifySessionToken(opts.sessionSecret, token)) {
-    return false; // Authenticated — proceed
   }
 
   // Not authenticated
@@ -223,6 +226,23 @@ async function handleSafeEndpoint(
     return handleLogin(req, res, opts);
   }
 
+  // POST /api/safe/logout — clear session cookie
+  if (pathname === SAFE_LOGOUT_PATH && method === "POST") {
+    clearSessionCookie(res);
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  // GET /reset-password — serve reset password page (local only)
+  if (pathname === SAFE_RESET_PAGE_PATH && method === "GET") {
+    if (!isLocal) {
+      sendJson(res, 403, { ok: false, error: "Password reset is only accessible from localhost" });
+      return true;
+    }
+    serveResetPasswordPage(res);
+    return true;
+  }
+
   // POST /api/safe/reset-password — local only
   if (pathname === SAFE_RESET_PATH && method === "POST") {
     if (!isLocal) {
@@ -258,8 +278,9 @@ async function handleLogin(
     return true;
   }
 
-  // Verify password against config
-  if (!opts.configPassword || password !== opts.configPassword) {
+  // Verify password against config (read fresh in case it was reset)
+  const currentPassword = opts.configPassword || loadConfig().gateway?.auth?.password;
+  if (!currentPassword || password !== currentPassword) {
     sendJson(res, 401, { ok: false, error: "Invalid password" });
     return true;
   }
@@ -353,23 +374,17 @@ function serveLoginPage(res: ServerResponse, isLocal: boolean) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
-  const resetSection = isLocal
-    ? `<div id="resetSection" class="hidden">
-    <hr style="border-color:#2d3148;margin:1.5rem 0">
-    <h2 style="font-size:1.1rem;margin-bottom:0.5rem">Reset password</h2>
-    <form id="resetForm">
-      <label for="newPw">New password</label>
-      <input type="password" id="newPw" autocomplete="new-password" required>
-      <p class="hint">8+ characters &middot; uppercase &middot; lowercase &middot; digit</p>
-      <label for="newPw2">Confirm new password</label>
-      <input type="password" id="newPw2" autocomplete="new-password" required>
-      <p id="resetMsg" class="error" style="display:none"></p>
-      <button type="submit" id="resetSubmitBtn" class="btn-primary">Reset &amp; login</button>
-    </form>
-  </div>
-  <button type="button" id="resetBtn" class="link-btn" onclick="showReset()">Reset password</button>`
+  const resetLink = isLocal
+    ? `<a href="/reset-password" class="link-btn">Reset password</a>`
     : "";
-  res.end(LOGIN_PAGE_HTML.replace("<!--RESET_SECTION-->", resetSection));
+  res.end(LOGIN_PAGE_HTML.replace("<!--RESET_LINK-->", resetLink));
+}
+
+function serveResetPasswordPage(res: ServerResponse) {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(RESET_PASSWORD_PAGE_HTML);
 }
 
 function serveSetupPage(res: ServerResponse) {
@@ -460,30 +475,24 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 <div class="card">
   <h1>safe-openclaw</h1>
   <p class="subtitle">Enter your gateway password to continue.</p>
-
-  <!-- Login form -->
   <form id="loginForm">
     <label for="pw">Password</label>
     <input type="password" id="pw" name="password" autocomplete="current-password" required autofocus>
     <p id="loginMsg" class="error" style="display:none"></p>
     <button type="submit" id="loginBtn" class="btn-primary">Login</button>
   </form>
-
-  <!--RESET_SECTION-->
+  <!--RESET_LINK-->
 </div>
 <script>
-  // Login
   const loginForm = document.getElementById('loginForm');
   const pw = document.getElementById('pw');
   const loginMsg = document.getElementById('loginMsg');
   const loginBtn = document.getElementById('loginBtn');
-
   function showMsg(el, text, type) {
     el.textContent = text;
     el.className = type;
     el.style.display = '';
   }
-
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     loginMsg.style.display = 'none';
@@ -502,10 +511,7 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
         loginBtn.textContent = 'Login';
         return;
       }
-      // Cookie is set by server; also store token for WebSocket auth
-      if (data.token) {
-        localStorage.setItem('openclaw_token', data.token);
-      }
+      if (data.token) localStorage.setItem('openclaw_token', data.token);
       window.location.reload();
     } catch (err) {
       showMsg(loginMsg, 'Network error: ' + err, 'error');
@@ -513,55 +519,76 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
       loginBtn.textContent = 'Login';
     }
   });
+</script>
+</body>
+</html>
+`;
 
-  // Password reset (local only)
-  function showReset() {
-    document.getElementById('resetSection').classList.remove('hidden');
-    const btn = document.getElementById('resetBtn');
-    if (btn) btn.style.display = 'none';
-  }
-
+const RESET_PASSWORD_PAGE_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>safe-openclaw — Reset Password</title>
+<style>${SHARED_STYLES}</style>
+</head>
+<body>
+<div class="card">
+  <h1>safe-openclaw</h1>
+  <p class="subtitle">Set a new password for your gateway.</p>
+  <form id="resetForm">
+    <label for="newPw">New password</label>
+    <input type="password" id="newPw" autocomplete="new-password" required autofocus>
+    <p class="hint">8+ characters &middot; uppercase &middot; lowercase &middot; digit</p>
+    <label for="newPw2">Confirm new password</label>
+    <input type="password" id="newPw2" autocomplete="new-password" required>
+    <p id="resetMsg" class="error" style="display:none"></p>
+    <button type="submit" id="resetSubmitBtn" class="btn-primary">Reset &amp; login</button>
+  </form>
+  <a href="/" class="link-btn">Back to login</a>
+</div>
+<script>
   const resetForm = document.getElementById('resetForm');
-  if (resetForm) {
-    const newPw = document.getElementById('newPw');
-    const newPw2 = document.getElementById('newPw2');
-    const resetMsg = document.getElementById('resetMsg');
-    const resetSubmitBtn = document.getElementById('resetSubmitBtn');
-
-    resetForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      resetMsg.style.display = 'none';
-      if (newPw.value !== newPw2.value) {
-        showMsg(resetMsg, 'Passwords do not match.', 'error');
-        return;
-      }
-      resetSubmitBtn.disabled = true;
-      resetSubmitBtn.textContent = 'Saving…';
-      try {
-        const res = await fetch('/api/safe/reset-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: newPw.value }),
-        });
-        const data = await res.json();
-        if (!data.ok) {
-          showMsg(resetMsg, data.error || 'Reset failed', 'error');
-          resetSubmitBtn.disabled = false;
-          resetSubmitBtn.textContent = 'Reset & login';
-          return;
-        }
-        if (data.token) {
-          localStorage.setItem('openclaw_token', data.token);
-        }
-        showMsg(resetMsg, 'Password reset! Redirecting…', 'success');
-        setTimeout(() => { window.location.href = '/'; }, 800);
-      } catch (err) {
-        showMsg(resetMsg, 'Network error: ' + err, 'error');
+  const newPw = document.getElementById('newPw');
+  const newPw2 = document.getElementById('newPw2');
+  const resetMsg = document.getElementById('resetMsg');
+  const resetSubmitBtn = document.getElementById('resetSubmitBtn');
+  function showMsg(el, text, type) {
+    el.textContent = text;
+    el.className = type;
+    el.style.display = '';
+  }
+  resetForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resetMsg.style.display = 'none';
+    if (newPw.value !== newPw2.value) {
+      showMsg(resetMsg, 'Passwords do not match.', 'error');
+      return;
+    }
+    resetSubmitBtn.disabled = true;
+    resetSubmitBtn.textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/safe/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPw.value }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        showMsg(resetMsg, data.error || 'Reset failed', 'error');
         resetSubmitBtn.disabled = false;
         resetSubmitBtn.textContent = 'Reset & login';
+        return;
       }
-    });
-  }
+      if (data.token) localStorage.setItem('openclaw_token', data.token);
+      showMsg(resetMsg, 'Password reset! Redirecting…', 'success');
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    } catch (err) {
+      showMsg(resetMsg, 'Network error: ' + err, 'error');
+      resetSubmitBtn.disabled = false;
+      resetSubmitBtn.textContent = 'Reset & login';
+    }
+  });
 </script>
 </body>
 </html>
