@@ -842,14 +842,14 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
         localStorage.setItem('openclaw_token', data.token);
       }
       form.style.display = 'none';
-      msgEl.innerHTML = '<strong>Password set! Encrypting your API tokens…</strong><br><br>' +
+      msg.innerHTML = '<strong>Password set! Encrypting your API tokens…</strong><br><br>' +
         'The gateway will restart automatically to apply encryption.<br><br>' +
         'If it does not restart, run:<br>' +
         '<code style="display:block;margin-top:0.5rem;padding:0.5rem 0.75rem;background:rgba(15,10,30,0.6);border-radius:6px;font-size:0.85rem;color:#a78bfa;">openclaw gateway stop && openclaw gateway run</code>' +
         '<button id="checkRestartBtn" class="btn-primary" style="margin-top:1.25rem;" onclick="checkRestart()">Verify &amp; continue</button>' +
         '<p id="restartStatus" style="margin-top:0.75rem;font-size:0.85rem;color:rgba(148,163,184,0.8);display:none;"></p>';
-      msgEl.className = 'msg success';
-      msgEl.style.display = '';
+      msg.className = 'msg success';
+      msg.style.display = '';
     } catch (err) {
       showMsg('Network error: ' + err, 'error');
       btn.disabled = false;
