@@ -126,9 +126,10 @@ function redactObject(obj: unknown, hints?: ConfigUiHints): unknown {
 
 /**
  * Collect all sensitive string values from a config object.
- * Used for text-based redaction of the raw JSON5 source.
+ * Used for text-based redaction of the raw JSON5 source,
+ * and by safe-openclaw output filtering to redact secrets from AI responses.
  */
-function collectSensitiveValues(obj: unknown, hints?: ConfigUiHints): string[] {
+export function collectSensitiveValues(obj: unknown, hints?: ConfigUiHints): string[] {
   const result: string[] = [];
   if (hints) {
     const lookup = buildRedactionLookup(hints);

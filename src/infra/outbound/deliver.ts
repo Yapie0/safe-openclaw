@@ -35,6 +35,7 @@ import { sendMessageSignal } from "../../signal/send.js";
 import type { sendMessageSlack } from "../../slack/send.js";
 import type { sendMessageTelegram } from "../../telegram/send.js";
 import type { sendMessageWhatsApp } from "../../web/outbound.js";
+import { redactSecretsFromOutput } from "../../gateway/safe-output-redact.js";
 import { throwIfAborted } from "./abort.js";
 import { ackDelivery, enqueueDelivery, failDelivery } from "./delivery-queue.js";
 import type { OutboundIdentity } from "./identity.js";
@@ -719,6 +720,12 @@ async function deliverOutboundPayloadsCore(
       }
       const effectivePayload = hookResult.payload;
       payloadSummary = hookResult.payloadSummary;
+
+      // safe-openclaw: redact secrets from outbound text before delivery
+      payloadSummary = {
+        ...payloadSummary,
+        text: redactSecretsFromOutput(payloadSummary.text, params.cfg),
+      };
 
       params.onPayload?.(payloadSummary);
       const sendOverrides = {
