@@ -69,7 +69,7 @@ jobs:
           set -euo pipefail
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [[ "$PKG_VERSION" == *-beta.* ]]; then
-            npm publish --access public --tag beta --provenance
+            npm publish --access public --tag beta
           else
-            npm publish --access public --provenance
+            npm publish --access public
           fi
