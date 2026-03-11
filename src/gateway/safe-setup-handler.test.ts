@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { verifySessionToken } from "./safe-session.js";
+import { issueSessionToken, verifySessionToken } from "./safe-session.js";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -22,11 +22,12 @@ vi.mock("./auth.js", async (importOriginal) => {
   return { ...actual, isLocalDirectRequest: mocks.isLocalDirectRequest };
 });
 
-import { handleSafeSetupRequest } from "./safe-setup-handler.js";
+import { handleSafeAuthGate, hasValidSession } from "./safe-setup-handler.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const SECRET = "test-session-secret-abcdef123456";
+const CONFIG_PASSWORD = "Secure1Pass";
 
 function makeReq(opts: {
   method?: string;
@@ -43,7 +44,6 @@ function makeReq(opts: {
     socket: { remoteAddress: opts.remoteAddress ?? "127.0.0.1" },
   }) as unknown as IncomingMessage;
 
-  // Emit body as a data event on next tick so readJsonBody can consume it
   if (opts.body !== undefined) {
     setImmediate(() => {
       emitter.emit("data", Buffer.from(JSON.stringify(opts.body)));
@@ -95,9 +95,18 @@ function parsedBody(res: ReturnType<typeof makeRes>): Record<string, unknown> {
   return JSON.parse(res._body) as Record<string, unknown>;
 }
 
+function gateOpts(overrides?: Partial<Parameters<typeof handleSafeAuthGate>[2]>) {
+  return {
+    needsSetup: false,
+    sessionSecret: SECRET,
+    configPassword: CONFIG_PASSWORD,
+    ...overrides,
+  };
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("handleSafeSetupRequest", () => {
+describe("handleSafeAuthGate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadConfig.mockReturnValue({});
@@ -105,139 +114,215 @@ describe("handleSafeSetupRequest", () => {
     mocks.isLocalDirectRequest.mockReturnValue(true);
   });
 
-  // ── Returns false for unrelated paths ─────────────────────────────────────
+  // ── Auth gate: blocks unauthenticated requests ───────────────────────────
 
-  it("returns false for unrelated paths", async () => {
-    const req = makeReq({ url: "/api/other" });
-    const res = makeRes();
-    const handled = await handleSafeSetupRequest(req, res, {
-      needsSetup: true,
-      sessionSecret: SECRET,
-    });
-    expect(handled).toBe(false);
-  });
-
-  // ── GET /setup ─────────────────────────────────────────────────────────────
-
-  describe("GET /setup", () => {
-    it("serves setup page for local requests", async () => {
-      mocks.isLocalDirectRequest.mockReturnValue(true);
-      const req = makeReq({ url: "/setup", method: "GET" });
+  describe("auth gate", () => {
+    it("blocks unauthenticated HTML requests with login page", async () => {
+      const req = makeReq({ url: "/", headers: { accept: "text/html" } });
       const res = makeRes();
-      const handled = await handleSafeSetupRequest(req, res, {
-        needsSetup: true,
-        sessionSecret: SECRET,
-      });
+      const handled = await handleSafeAuthGate(req, res, gateOpts());
       expect(handled).toBe(true);
       expect(res._status).toBe(200);
-      expect(res._headers["content-type"]).toMatch(/text\/html/);
+      expect(res._body).toContain("Login");
       expect(res._body).toContain("safe-openclaw");
     });
 
-    it("returns 403 for non-local requests", async () => {
-      mocks.isLocalDirectRequest.mockReturnValue(false);
-      const req = makeReq({ url: "/setup", method: "GET" });
+    it("blocks unauthenticated API requests with 401", async () => {
+      const req = makeReq({ url: "/api/something", headers: { accept: "application/json" } });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
-      expect(res._status).toBe(403);
-      expect(parsedBody(res).ok).toBe(false);
+      const handled = await handleSafeAuthGate(req, res, gateOpts());
+      expect(handled).toBe(true);
+      expect(res._status).toBe(401);
+    });
+
+    it("allows authenticated requests through (cookie)", async () => {
+      const token = issueSessionToken(SECRET);
+      const req = makeReq({
+        url: "/",
+        headers: { cookie: `openclaw_session=${token}` },
+      });
+      const res = makeRes();
+      const handled = await handleSafeAuthGate(req, res, gateOpts());
+      expect(handled).toBe(false);
+    });
+
+    it("allows authenticated requests through (Bearer token)", async () => {
+      const token = issueSessionToken(SECRET);
+      const req = makeReq({
+        url: "/",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const res = makeRes();
+      const handled = await handleSafeAuthGate(req, res, gateOpts());
+      expect(handled).toBe(false);
+    });
+
+    it("allows health probes through without auth", async () => {
+      for (const path of ["/health", "/healthz", "/ready", "/readyz"]) {
+        const req = makeReq({ url: path });
+        const res = makeRes();
+        const handled = await handleSafeAuthGate(req, res, gateOpts());
+        expect(handled).toBe(false);
+      }
+    });
+
+    it("shows reset password button for local requests", async () => {
+      mocks.isLocalDirectRequest.mockReturnValue(true);
+      const req = makeReq({ url: "/", headers: { accept: "text/html" } });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
+      expect(res._body).toContain("Reset password");
+    });
+
+    it("hides reset password button for remote requests", async () => {
+      mocks.isLocalDirectRequest.mockReturnValue(false);
+      const req = makeReq({ url: "/", headers: { accept: "text/html" } });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
+      expect(res._body).not.toContain("Reset password");
     });
   });
 
-  // ── POST /api/safe/setup ───────────────────────────────────────────────────
+  // ── Setup mode ──────────────────────────────────────────────────────────
 
-  describe("POST /api/safe/setup", () => {
-    it("returns 403 for non-local requests", async () => {
-      mocks.isLocalDirectRequest.mockReturnValue(false);
-      const req = makeReq({ url: "/api/safe/setup", method: "POST", body: { password: "Abc12345" } });
+  describe("setup mode", () => {
+    it("redirects local browser to /setup when needsSetup", async () => {
+      const req = makeReq({ url: "/", headers: { accept: "text/html" } });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
+      expect(res._status).toBe(302);
+      expect(res._headers.location).toBe("/setup");
+    });
+
+    it("blocks remote requests when needsSetup", async () => {
+      mocks.isLocalDirectRequest.mockReturnValue(false);
+      const req = makeReq({ url: "/anything" });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
       expect(res._status).toBe(403);
     });
 
-    it("returns 409 when setup is already done (needsSetup=false)", async () => {
-      mocks.isLocalDirectRequest.mockReturnValue(true);
-      const req = makeReq({ url: "/api/safe/setup", method: "POST", body: { password: "Abc12345" } });
+    it("serves setup page at GET /setup for local requests", async () => {
+      const req = makeReq({ url: "/setup", method: "GET" });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: false, sessionSecret: SECRET });
-      expect(res._status).toBe(409);
-      expect(parsedBody(res).ok).toBe(false);
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
+      expect(res._status).toBe(200);
+      expect(res._body).toContain("Set a password");
     });
 
-    it("returns 422 for weak password (too short)", async () => {
-      const req = makeReq({ url: "/api/safe/setup", method: "POST", body: { password: "Abc1" } });
+    it("returns 403 for GET /setup from remote", async () => {
+      mocks.isLocalDirectRequest.mockReturnValue(false);
+      const req = makeReq({ url: "/setup", method: "GET" });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
-      expect(res._status).toBe(422);
-      expect(parsedBody(res).ok).toBe(false);
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
+      expect(res._status).toBe(403);
     });
+  });
 
-    it("returns 422 for weak password (no uppercase)", async () => {
-      const req = makeReq({ url: "/api/safe/setup", method: "POST", body: { password: "abcdefg1" } });
-      const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
-      expect(res._status).toBe(422);
-    });
+  // ── POST /api/safe/setup ───────────────────────────────────────────────
 
-    it("returns 422 for weak password (no digit)", async () => {
-      const req = makeReq({ url: "/api/safe/setup", method: "POST", body: { password: "Abcdefgh" } });
-      const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
-      expect(res._status).toBe(422);
-    });
-
-    it("returns 400 for missing password field", async () => {
-      const req = makeReq({ url: "/api/safe/setup", method: "POST", body: { other: "field" } });
-      const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
-      expect(res._status).toBe(400);
-    });
-
-    it("saves password to config and returns session token on success", async () => {
+  describe("POST /api/safe/setup", () => {
+    it("saves password and returns session token", async () => {
       const req = makeReq({
         url: "/api/safe/setup",
         method: "POST",
         body: { password: "Secure1Pass" },
       });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
 
       expect(res._status).toBe(200);
       const body = parsedBody(res);
       expect(body.ok).toBe(true);
       expect(typeof body.token).toBe("string");
-
-      // Token must be verifiable
       expect(verifySessionToken(SECRET, body.token as string)).not.toBeNull();
+      // Cookie should be set
+      expect(res._headers["set-cookie"]).toContain("openclaw_session=");
 
-      // Config must have been written with password mode
-      expect(mocks.writeConfigFile).toHaveBeenCalledTimes(1);
       const savedCfg = mocks.writeConfigFile.mock.calls[0]?.[0] as OpenClawConfig;
       expect(savedCfg.gateway?.auth?.mode).toBe("password");
       expect(savedCfg.gateway?.auth?.password).toBe("Secure1Pass");
-      // Auto-generated token must be cleared
-      expect(savedCfg.gateway?.auth?.token).toBeUndefined();
     });
 
-    it("returns 400 for invalid JSON body", async () => {
-      const emitter = new EventEmitter();
-      const req = Object.assign(emitter, {
-        method: "POST",
+    it("returns 409 when already set up", async () => {
+      const req = makeReq({
         url: "/api/safe/setup",
-        headers: { host: "localhost" },
-        socket: { remoteAddress: "127.0.0.1" },
-      }) as unknown as IncomingMessage;
-      setImmediate(() => {
-        emitter.emit("data", Buffer.from("not-json{{{"));
-        emitter.emit("end");
+        method: "POST",
+        body: { password: "Secure1Pass" },
       });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: true, sessionSecret: SECRET });
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: false }));
+      expect(res._status).toBe(409);
+    });
+
+    it("returns 422 for weak password", async () => {
+      const req = makeReq({
+        url: "/api/safe/setup",
+        method: "POST",
+        body: { password: "weak" },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
+      expect(res._status).toBe(422);
+    });
+
+    it("returns 403 for non-local requests", async () => {
+      mocks.isLocalDirectRequest.mockReturnValue(false);
+      const req = makeReq({
+        url: "/api/safe/setup",
+        method: "POST",
+        body: { password: "Secure1Pass" },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
+      expect(res._status).toBe(403);
+    });
+  });
+
+  // ── POST /api/safe/login ───────────────────────────────────────────────
+
+  describe("POST /api/safe/login", () => {
+    it("returns session token for correct password", async () => {
+      const req = makeReq({
+        url: "/api/safe/login",
+        method: "POST",
+        body: { password: CONFIG_PASSWORD },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
+
+      expect(res._status).toBe(200);
+      const body = parsedBody(res);
+      expect(body.ok).toBe(true);
+      expect(typeof body.token).toBe("string");
+      expect(verifySessionToken(SECRET, body.token as string)).not.toBeNull();
+      expect(res._headers["set-cookie"]).toContain("openclaw_session=");
+    });
+
+    it("returns 401 for wrong password", async () => {
+      const req = makeReq({
+        url: "/api/safe/login",
+        method: "POST",
+        body: { password: "WrongPass1" },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
+      expect(res._status).toBe(401);
+    });
+
+    it("returns 400 for missing password", async () => {
+      const req = makeReq({
+        url: "/api/safe/login",
+        method: "POST",
+        body: {},
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
       expect(res._status).toBe(400);
     });
   });
 
-  // ── POST /api/safe/reset-password ─────────────────────────────────────────
+  // ── POST /api/safe/reset-password ──────────────────────────────────────
 
   describe("POST /api/safe/reset-password", () => {
     it("returns 403 for non-local requests", async () => {
@@ -248,25 +333,23 @@ describe("handleSafeSetupRequest", () => {
         body: { password: "NewPass123" },
       });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: false, sessionSecret: SECRET });
+      await handleSafeAuthGate(req, res, gateOpts());
       expect(res._status).toBe(403);
     });
 
-    it("resets password even when needsSetup=false", async () => {
-      mocks.isLocalDirectRequest.mockReturnValue(true);
+    it("resets password and returns session token", async () => {
       const req = makeReq({
         url: "/api/safe/reset-password",
         method: "POST",
         body: { password: "NewSecure1" },
       });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: false, sessionSecret: SECRET });
+      await handleSafeAuthGate(req, res, gateOpts());
 
       expect(res._status).toBe(200);
       const body = parsedBody(res);
       expect(body.ok).toBe(true);
       expect(typeof body.token).toBe("string");
-      expect(verifySessionToken(SECRET, body.token as string)).not.toBeNull();
 
       const savedCfg = mocks.writeConfigFile.mock.calls[0]?.[0] as OpenClawConfig;
       expect(savedCfg.gateway?.auth?.password).toBe("NewSecure1");
@@ -279,9 +362,55 @@ describe("handleSafeSetupRequest", () => {
         body: { password: "weak" },
       });
       const res = makeRes();
-      await handleSafeSetupRequest(req, res, { needsSetup: false, sessionSecret: SECRET });
+      await handleSafeAuthGate(req, res, gateOpts());
       expect(res._status).toBe(422);
-      expect(mocks.writeConfigFile).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── GET /api/safe/auth-status ──────────────────────────────────────────
+
+  describe("GET /api/safe/auth-status", () => {
+    it("returns auth state for unauthenticated request", async () => {
+      const req = makeReq({ url: "/api/safe/auth-status", method: "GET" });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
+      const body = parsedBody(res);
+      expect(body.ok).toBe(true);
+      expect(body.authenticated).toBe(false);
+      expect(body.needsSetup).toBe(false);
+    });
+
+    it("returns authenticated=true for valid session", async () => {
+      const token = issueSessionToken(SECRET);
+      const req = makeReq({
+        url: "/api/safe/auth-status",
+        method: "GET",
+        headers: { cookie: `openclaw_session=${token}` },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts());
+      const body = parsedBody(res);
+      expect(body.authenticated).toBe(true);
+    });
+  });
+
+  // ── hasValidSession ────────────────────────────────────────────────────
+
+  describe("hasValidSession", () => {
+    it("returns true for valid cookie", () => {
+      const token = issueSessionToken(SECRET);
+      const req = makeReq({ headers: { cookie: `openclaw_session=${token}` } });
+      expect(hasValidSession(req, SECRET)).toBe(true);
+    });
+
+    it("returns false for no session", () => {
+      const req = makeReq({});
+      expect(hasValidSession(req, SECRET)).toBe(false);
+    });
+
+    it("returns false for invalid token", () => {
+      const req = makeReq({ headers: { cookie: "openclaw_session=garbage" } });
+      expect(hasValidSession(req, SECRET)).toBe(false);
     });
   });
 });

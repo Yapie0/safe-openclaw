@@ -67,8 +67,7 @@ import {
 } from "./server/plugins-http.js";
 import type { ReadinessChecker } from "./server/readiness.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
-import { handleSafeSetupRequest } from "./safe-setup-handler.js";
-import { verifySessionToken } from "./safe-session.js";
+import { handleSafeAuthGate, hasValidSession } from "./safe-setup-handler.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -641,50 +640,25 @@ export function createGatewayHttpServer(opts: {
       }
       const requestPath = new URL(req.url ?? "/", "http://localhost").pathname;
 
-      // safe-openclaw: handle setup endpoints and session token validation.
+      // safe-openclaw: server-side auth gate.
+      // Blocks all HTTP requests (including static UI assets) unless the user
+      // has a valid session token.  Login/setup/reset endpoints handle themselves.
       if (sessionSecret) {
-        // Always allow setup-related endpoints through (they do their own local check).
-        const setupHandled = await handleSafeSetupRequest(req, res, {
+        const gateHandled = await handleSafeAuthGate(req, res, {
           needsSetup: needsSetup ?? false,
           sessionSecret,
+          configPassword: resolvedAuth.password,
           trustedProxies,
+          allowRealIpFallback,
         });
-        if (setupHandled) return;
-
-        // When setup is required, block all other non-local requests.
-        if (needsSetup) {
-          const isLocal = isLocalDirectRequest(req, trustedProxies, allowRealIpFallback);
-          if (!isLocal) {
-            res.statusCode = 403;
-            res.setHeader("Content-Type", "application/json; charset=utf-8");
-            res.setHeader("Cache-Control", "no-store");
-            res.end(
-              JSON.stringify({
-                ok: false,
-                error:
-                  "Gateway requires first-time setup. Open http://localhost:<port>/setup from the gateway host.",
-              }),
-            );
-            return;
-          }
-          // Local requests without setup: redirect browser to /setup page.
-          const accept = req.headers.accept ?? "";
-          if (accept.includes("text/html") && requestPath !== "/setup") {
-            res.statusCode = 302;
-            res.setHeader("Location", "/setup");
-            res.end();
-            return;
-          }
-        }
-
+        if (gateHandled) return;
       }
 
       // safe-openclaw: if a valid signed session token is presented, treat the
       // request as authenticated (bypass password check for this request only).
       let effectiveAuth: ResolvedGatewayAuth = resolvedAuth;
       if (sessionSecret && resolvedAuth.mode === "password") {
-        const bearer = getBearerToken(req);
-        if (bearer && verifySessionToken(sessionSecret, bearer)) {
+        if (hasValidSession(req, sessionSecret)) {
           effectiveAuth = { ...resolvedAuth, mode: "none" };
         }
       }
