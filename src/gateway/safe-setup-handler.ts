@@ -745,15 +745,16 @@ const RESET_PASSWORD_PAGE_HTML = `<!DOCTYPE html>
     btn.textContent = 'Checking…';
     status.style.display = '';
     status.style.color = 'rgba(148,163,184,0.8)';
-    status.textContent = 'Waiting for gateway to restart…';
+    status.textContent = 'Waiting for gateway to shut down…';
     let attempts = 0;
-    const maxAttempts = 30;
+    const maxAttempts = 40;
+    let sawDown = false;
     if (restartCheckInterval) clearInterval(restartCheckInterval);
     restartCheckInterval = setInterval(async () => {
       attempts++;
       try {
         const r = await fetch('/api/safe/auth-status', { signal: AbortSignal.timeout(3000) });
-        if (r.ok) {
+        if (r.ok && sawDown) {
           clearInterval(restartCheckInterval);
           status.style.color = '#4ade80';
           status.textContent = 'Gateway is running! Redirecting…';
@@ -761,15 +762,19 @@ const RESET_PASSWORD_PAGE_HTML = `<!DOCTYPE html>
           setTimeout(() => { window.location.href = '/'; }, 1000);
           return;
         }
-      } catch {}
+      } catch {
+        sawDown = true;
+      }
       if (attempts >= maxAttempts) {
         clearInterval(restartCheckInterval);
         status.style.color = '#f87171';
         status.textContent = 'Gateway did not respond. Please restart manually.';
         btn.disabled = false;
         btn.textContent = 'Retry';
+      } else if (!sawDown) {
+        status.textContent = 'Waiting for gateway to shut down… (' + attempts + '/' + maxAttempts + ')';
       } else {
-        status.textContent = 'Waiting for gateway to restart… (' + attempts + '/' + maxAttempts + ')';
+        status.textContent = 'Gateway stopped. Waiting for restart… (' + attempts + '/' + maxAttempts + ')';
       }
     }, 2000);
   };
@@ -865,15 +870,16 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
     btn.textContent = 'Checking…';
     status.style.display = '';
     status.style.color = 'rgba(148,163,184,0.8)';
-    status.textContent = 'Waiting for gateway to restart…';
+    status.textContent = 'Waiting for gateway to shut down…';
     let attempts = 0;
-    const maxAttempts = 30;
+    const maxAttempts = 40;
+    let sawDown = false;
     if (restartCheckInterval) clearInterval(restartCheckInterval);
     restartCheckInterval = setInterval(async () => {
       attempts++;
       try {
         const r = await fetch('/api/safe/auth-status', { signal: AbortSignal.timeout(3000) });
-        if (r.ok) {
+        if (r.ok && sawDown) {
           clearInterval(restartCheckInterval);
           status.style.color = '#4ade80';
           status.textContent = 'Gateway is running! Redirecting…';
@@ -881,15 +887,19 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
           setTimeout(() => { window.location.href = '/'; }, 1000);
           return;
         }
-      } catch {}
+      } catch {
+        sawDown = true;
+      }
       if (attempts >= maxAttempts) {
         clearInterval(restartCheckInterval);
         status.style.color = '#f87171';
         status.textContent = 'Gateway did not respond. Please restart manually.';
         btn.disabled = false;
         btn.textContent = 'Retry';
+      } else if (!sawDown) {
+        status.textContent = 'Waiting for gateway to shut down… (' + attempts + '/' + maxAttempts + ')';
       } else {
-        status.textContent = 'Waiting for gateway to restart… (' + attempts + '/' + maxAttempts + ')';
+        status.textContent = 'Gateway stopped. Waiting for restart… (' + attempts + '/' + maxAttempts + ')';
       }
     }, 2000);
   };
