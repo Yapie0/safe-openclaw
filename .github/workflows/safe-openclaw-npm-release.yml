@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,9 +67,7 @@ jobs:
           set -euo pipefail
           PKG_VERSION=$(node -p "require('./package.json').version")
           if [[ "$PKG_VERSION" == *-beta.* ]]; then
-            npm publish --access public --tag beta
+            npm publish --access public --tag beta --provenance
           else
-            npm publish --access public
+            npm publish --access public --provenance
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
