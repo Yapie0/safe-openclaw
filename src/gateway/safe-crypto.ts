@@ -105,6 +105,11 @@ export function encryptEnvValues(
       result[k] = v;
       continue;
     }
+    if (isEncrypted(v) && !oldKeyHex) {
+      // Already encrypted but no old key to decrypt — leave as-is to avoid double encryption
+      result[k] = v;
+      continue;
+    }
     // Get plaintext: decrypt if already encrypted, otherwise use as-is
     const plaintext = isEncrypted(v) && oldKeyHex ? decryptValue(v, oldKeyHex) : v;
     result[k] = encryptValue(plaintext, newKeyHex);
