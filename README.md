@@ -10,6 +10,39 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
+## Already running openclaw? One command to patch it
+
+No need to uninstall anything. The installer detects your existing openclaw, upgrades it in place with all security patches, and restarts the gateway — your config, sessions, and channels are preserved:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.sh | bash
+```
+
+What the installer does:
+1. Installs safe-openclaw as a drop-in replacement for openclaw (`npm install -g openclaw@npm:safe-openclaw`)
+2. Stops any running gateway
+3. Restarts the gateway with security patches active
+4. First-time users are prompted to set a password at `http://localhost:18789/setup`
+
+After the upgrade, the `openclaw` command is now safe-openclaw under the hood. All your existing config and channels keep working.
+
+## Fresh install
+
+Runtime: **Node >= 22**.
+
+```bash
+npm install -g safe-openclaw
+
+# Start the gateway
+safe-openclaw gateway run
+
+# First browser visit → redirected to /setup → set your password
+# Or from the terminal:
+safe-openclaw set-password
+```
+
+Both `safe-openclaw` and `openclaw` commands are available after install.
+
 ## What's different
 
 | Feature | openclaw | safe-openclaw |
@@ -58,29 +91,6 @@ All password set/reset operations enforce: minimum 8 characters, at least one up
 ### 6. Auto-restart on password change
 
 When the password is changed via the web UI, the gateway detects the config change and triggers an automatic restart to apply the new encryption keys. The reset page includes a "Verify & continue" button that polls until the gateway is back online.
-
-## Install
-
-Runtime: **Node >= 22**.
-
-```bash
-npm install -g safe-openclaw
-# or
-pnpm add -g safe-openclaw
-```
-
-Both `safe-openclaw` and `openclaw` commands are available after install.
-
-## Quick start
-
-```bash
-# Start the gateway
-safe-openclaw gateway run
-
-# First browser visit → redirected to /setup → set your password
-# Or from the terminal:
-safe-openclaw set-password
-```
 
 ## Migrating from openclaw
 
