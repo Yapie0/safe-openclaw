@@ -799,9 +799,9 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
     <p class="hint">8+ characters &middot; uppercase &middot; lowercase &middot; digit</p>
     <label for="pw2">Confirm password</label>
     <input type="password" id="pw2" name="password2" autocomplete="new-password" required>
-    <p id="msg" class="error" style="display:none"></p>
     <button type="submit" id="btn" class="btn-primary">Set password &amp; continue</button>
   </form>
+  <p id="msg" class="error" style="display:none"></p>
 </div>
 <script>
   const form = document.getElementById('form');
@@ -848,7 +848,7 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
         '<code style="display:block;margin-top:0.5rem;padding:0.5rem 0.75rem;background:rgba(15,10,30,0.6);border-radius:6px;font-size:0.85rem;color:#a78bfa;">openclaw gateway stop && openclaw gateway run</code>' +
         '<button id="checkRestartBtn" class="btn-primary" style="margin-top:1.25rem;" onclick="checkRestart()">Verify &amp; continue</button>' +
         '<p id="restartStatus" style="margin-top:0.75rem;font-size:0.85rem;color:rgba(148,163,184,0.8);display:none;"></p>';
-      msg.className = 'msg success';
+      msg.className = 'success';
       msg.style.display = '';
     } catch (err) {
       showMsg('Network error: ' + err, 'error');
