@@ -1,0 +1,74 @@
+name: safe-openclaw NPM Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: safe-openclaw-npm-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22.x"
+  PNPM_VERSION: "10.23.0"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate version matches tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"           # e.g. v1.0.0
+          PKG_VERSION=$(node -p "require('./package.json').version")  # e.g. 1.0.0
+          EXPECTED_VERSION="${TAG#v}"        # strip leading v
+          if [[ "$PKG_VERSION" != "$EXPECTED_VERSION" ]]; then
+            echo "ERROR: package.json version ($PKG_VERSION) does not match tag ($TAG)"
+            exit 1
+          fi
+          echo "Publishing safe-openclaw@$PKG_VERSION"
+
+      - name: Ensure version not already published
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "safe-openclaw@${PKG_VERSION}" version >/dev/null 2>&1; then
+            echo "safe-openclaw@${PKG_VERSION} is already published."
+            exit 1
+          fi
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [[ "$PKG_VERSION" == *-beta.* ]]; then
+            npm publish --access public --tag beta
+          else
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
