@@ -414,67 +414,185 @@ function serveSetupPage(res: ServerResponse) {
 const SHARED_STYLES = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: system-ui, -apple-system, sans-serif;
-    background: #0f1117;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: #0c0a1a;
     color: #e2e8f0;
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
     padding: 1rem;
+    overflow: hidden;
+    position: relative;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top: -40%;
+    left: -20%;
+    width: 80%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(124,58,237,0.15) 0%, transparent 70%);
+    pointer-events: none;
+    animation: glow-drift 8s ease-in-out infinite alternate;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -30%;
+    right: -20%;
+    width: 70%;
+    height: 70%;
+    background: radial-gradient(ellipse, rgba(236,72,153,0.1) 0%, transparent 70%);
+    pointer-events: none;
+    animation: glow-drift 10s ease-in-out infinite alternate-reverse;
+  }
+  @keyframes glow-drift {
+    0% { transform: translate(0, 0) scale(1); }
+    100% { transform: translate(30px, -20px) scale(1.05); }
   }
   .card {
-    background: #1a1d27;
-    border: 1px solid #2d3148;
-    border-radius: 12px;
-    padding: 2rem;
+    position: relative;
+    background: rgba(20, 16, 40, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 20px;
+    padding: 2.5rem;
     width: 100%;
-    max-width: 400px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    max-width: 420px;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.4),
+      0 0 0 1px rgba(124, 58, 237, 0.05) inset,
+      0 0 80px -20px rgba(124, 58, 237, 0.1);
   }
-  h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
-  .subtitle { color: #94a3b8; font-size: 0.875rem; margin-bottom: 1.5rem; }
-  label { display: block; font-size: 0.875rem; margin-bottom: 0.4rem; color: #cbd5e1; }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.25rem;
+  }
+  .brand-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #7c3aed, #ec4899);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .brand-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: #fff;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #e2e8f0 30%, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .subtitle {
+    color: rgba(148, 163, 184, 0.8);
+    font-size: 0.875rem;
+    margin-bottom: 1.75rem;
+    line-height: 1.5;
+  }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 0.4rem;
+    color: rgba(203, 213, 225, 0.9);
+    letter-spacing: 0.02em;
+  }
   input[type=password] {
     width: 100%;
-    padding: 0.6rem 0.75rem;
-    background: #0f1117;
-    border: 1px solid #2d3148;
-    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    background: rgba(15, 10, 30, 0.6);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 10px;
     color: #e2e8f0;
-    font-size: 1rem;
+    font-size: 0.95rem;
     margin-bottom: 1rem;
     outline: none;
-    transition: border-color 0.15s;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  input[type=password]:focus { border-color: #6366f1; }
-  .hint { font-size: 0.78rem; color: #64748b; margin-top: -0.75rem; margin-bottom: 1rem; }
+  input[type=password]:focus {
+    border-color: rgba(124, 58, 237, 0.5);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1), 0 0 20px -5px rgba(124, 58, 237, 0.2);
+  }
+  input[type=password]::placeholder { color: rgba(100, 116, 139, 0.6); }
+  .hint {
+    font-size: 0.75rem;
+    color: rgba(100, 116, 139, 0.7);
+    margin-top: -0.7rem;
+    margin-bottom: 1rem;
+  }
   .btn-primary {
     width: 100%;
-    padding: 0.65rem;
-    background: #6366f1;
+    padding: 0.7rem;
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
     color: #fff;
     border: none;
-    border-radius: 8px;
-    font-size: 1rem;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: background 0.15s;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px -3px rgba(124, 58, 237, 0.4);
+    letter-spacing: 0.01em;
   }
-  .btn-primary:hover { background: #4f46e5; }
-  .btn-primary:disabled { background: #374151; cursor: not-allowed; }
-  .error { color: #f87171; font-size: 0.875rem; margin-bottom: 1rem; }
-  .success { color: #4ade80; font-size: 0.875rem; margin-bottom: 1rem; }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    box-shadow: 0 6px 20px -3px rgba(124, 58, 237, 0.5);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled {
+    background: rgba(55, 65, 81, 0.5);
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .error {
+    color: #f87171;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(248, 113, 113, 0.08);
+    border-radius: 8px;
+    border: 1px solid rgba(248, 113, 113, 0.15);
+  }
+  .success {
+    color: #4ade80;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(74, 222, 128, 0.08);
+    border-radius: 8px;
+    border: 1px solid rgba(74, 222, 128, 0.15);
+  }
   .link-btn {
+    display: inline-block;
     background: none;
     border: none;
-    color: #64748b;
+    color: rgba(139, 92, 246, 0.7);
     font-size: 0.8rem;
     cursor: pointer;
-    margin-top: 1rem;
-    text-decoration: underline;
+    margin-top: 1.25rem;
+    text-decoration: none;
     padding: 0;
+    transition: color 0.15s;
   }
-  .link-btn:hover { color: #94a3b8; }
+  .link-btn:hover { color: #a78bfa; }
   .hidden { display: none; }
 `;
 
@@ -488,11 +606,14 @@ const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
 <div class="card">
-  <h1>safe-openclaw</h1>
+  <div class="brand">
+    <div class="brand-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+    <h1>safe-openclaw</h1>
+  </div>
   <p class="subtitle">Enter your gateway password to continue.</p>
   <form id="loginForm">
     <label for="pw">Password</label>
-    <input type="password" id="pw" name="password" autocomplete="current-password" required autofocus>
+    <input type="password" id="pw" name="password" autocomplete="current-password" required autofocus placeholder="Enter password">
     <p id="loginMsg" class="error" style="display:none"></p>
     <button type="submit" id="loginBtn" class="btn-primary">Login</button>
   </form>
@@ -549,7 +670,10 @@ const RESET_PASSWORD_PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
 <div class="card">
-  <h1>safe-openclaw</h1>
+  <div class="brand">
+    <div class="brand-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+    <h1>safe-openclaw</h1>
+  </div>
   <p class="subtitle">Set a new password for your gateway.</p>
   <form id="resetForm">
     <label for="newPw">New password</label>
@@ -557,9 +681,9 @@ const RESET_PASSWORD_PAGE_HTML = `<!DOCTYPE html>
     <p class="hint">8+ characters &middot; uppercase &middot; lowercase &middot; digit</p>
     <label for="newPw2">Confirm new password</label>
     <input type="password" id="newPw2" autocomplete="new-password" required>
-    <p id="resetMsg" class="error" style="display:none"></p>
     <button type="submit" id="resetSubmitBtn" class="btn-primary">Reset &amp; login</button>
   </form>
+  <p id="resetMsg" class="error" style="display:none"></p>
   <a href="/" class="link-btn">Back to login</a>
 </div>
 <script>
@@ -596,14 +720,59 @@ const RESET_PASSWORD_PAGE_HTML = `<!DOCTYPE html>
         return;
       }
       if (data.token) localStorage.setItem('openclaw_token', data.token);
-      showMsg(resetMsg, 'Password reset! Redirecting…', 'success');
-      setTimeout(() => { window.location.href = '/'; }, 800);
+      resetForm.style.display = 'none';
+      document.querySelector('.link-btn').style.display = 'none';
+      resetMsg.innerHTML = '<strong>Password reset successful!</strong><br><br>' +
+        'The gateway will restart automatically to apply the new encryption keys.<br><br>' +
+        'If it does not restart, run:<br>' +
+        '<code style="display:block;margin-top:0.5rem;padding:0.5rem 0.75rem;background:rgba(15,10,30,0.6);border-radius:6px;font-size:0.85rem;color:#a78bfa;">openclaw gateway stop && openclaw gateway run</code>' +
+        '<button id="checkRestartBtn" class="btn-primary" style="margin-top:1.25rem;" onclick="checkRestart()">Verify &amp; continue</button>' +
+        '<p id="restartStatus" style="margin-top:0.75rem;font-size:0.85rem;color:rgba(148,163,184,0.8);display:none;"></p>';
+      resetMsg.className = 'success';
+      resetMsg.style.display = '';
     } catch (err) {
       showMsg(resetMsg, 'Network error: ' + err, 'error');
       resetSubmitBtn.disabled = false;
       resetSubmitBtn.textContent = 'Reset & login';
     }
   });
+
+  let restartCheckInterval = null;
+  window.checkRestart = function() {
+    const btn = document.getElementById('checkRestartBtn');
+    const status = document.getElementById('restartStatus');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    status.style.display = '';
+    status.style.color = 'rgba(148,163,184,0.8)';
+    status.textContent = 'Waiting for gateway to restart…';
+    let attempts = 0;
+    const maxAttempts = 30;
+    if (restartCheckInterval) clearInterval(restartCheckInterval);
+    restartCheckInterval = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch('/api/safe/auth-status', { signal: AbortSignal.timeout(3000) });
+        if (r.ok) {
+          clearInterval(restartCheckInterval);
+          status.style.color = '#4ade80';
+          status.textContent = 'Gateway is running! Redirecting…';
+          btn.textContent = 'OK';
+          setTimeout(() => { window.location.href = '/'; }, 1000);
+          return;
+        }
+      } catch {}
+      if (attempts >= maxAttempts) {
+        clearInterval(restartCheckInterval);
+        status.style.color = '#f87171';
+        status.textContent = 'Gateway did not respond. Please restart manually.';
+        btn.disabled = false;
+        btn.textContent = 'Retry';
+      } else {
+        status.textContent = 'Waiting for gateway to restart… (' + attempts + '/' + maxAttempts + ')';
+      }
+    }, 2000);
+  };
 </script>
 </body>
 </html>
@@ -619,7 +788,10 @@ const SETUP_PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
 <div class="card">
-  <h1>safe-openclaw</h1>
+  <div class="brand">
+    <div class="brand-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+    <h1>safe-openclaw</h1>
+  </div>
   <p class="subtitle">Set a password to secure your gateway before going further.</p>
   <form id="form">
     <label for="pw">Password</label>
