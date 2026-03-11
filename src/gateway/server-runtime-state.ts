@@ -51,6 +51,10 @@ export async function createGatewayRuntimeState(params: {
   resolvedAuth: ResolvedGatewayAuth;
   /** Optional rate limiter for auth brute-force protection. */
   rateLimiter?: AuthRateLimiter;
+  /** safe-openclaw: gateway needs first-time password setup. */
+  needsSetup?: boolean;
+  /** safe-openclaw: HMAC secret for signing browser session tokens. */
+  sessionSecret?: string;
   gatewayTls?: GatewayTlsRuntime;
   hooksConfig: () => HooksConfigResolved | null;
   pluginRegistry: PluginRegistry;
@@ -160,6 +164,8 @@ export async function createGatewayRuntimeState(params: {
       rateLimiter: params.rateLimiter,
       getReadiness: params.getReadiness,
       tlsOptions: params.gatewayTls?.enabled ? params.gatewayTls.tlsOptions : undefined,
+      needsSetup: params.needsSetup,
+      sessionSecret: params.sessionSecret,
     });
     try {
       await listenGatewayHttpServer({

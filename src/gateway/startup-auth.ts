@@ -226,6 +226,13 @@ export async function ensureGatewayStartupAuth(params: {
   auth: ReturnType<typeof resolveGatewayAuth>;
   generatedToken?: string;
   persistedGeneratedToken: boolean;
+  /**
+   * true when no password or explicit token is configured and safe-openclaw
+   * needs the user to complete first-time setup before the gateway opens.
+   */
+  needsSetup: boolean;
+  /** HMAC secret used to sign browser session tokens (rotates each startup). */
+  sessionSecret: string;
 }> {
   assertExplicitGatewayAuthModeWhenBothConfigured(params.cfg);
   const env = params.env ?? process.env;
@@ -242,15 +249,42 @@ export async function ensureGatewayStartupAuth(params: {
           ...(resolvedPasswordRefValue ? { password: resolvedPasswordRefValue } : {}),
         }
       : undefined;
+  // Generate a per-startup HMAC secret for signing browser session tokens.
+  // This rotates on every restart; existing tokens are invalidated on restart.
+  const sessionSecret = crypto.randomBytes(32).toString("hex");
+
   const resolved = resolveGatewayAuthFromConfig({
     cfg: params.cfg,
     env,
     authOverride,
     tailscaleOverride: params.tailscaleOverride,
   });
-  if (resolved.mode !== "token" || (resolved.token?.trim().length ?? 0) > 0) {
+
+  // safe-openclaw: if no password and no explicit token are configured,
+  // enter setup mode instead of silently auto-generating a token.
+  const isDefaultTokenMode =
+    resolved.mode === "token" && (resolved.token?.trim().length ?? 0) === 0;
+  if (isDefaultTokenMode && resolved.modeSource === "default") {
+    // No explicit auth configured — require first-time password setup.
     assertHooksTokenSeparateFromGatewayAuth({ cfg: params.cfg, auth: resolved });
-    return { cfg: params.cfg, auth: resolved, persistedGeneratedToken: false };
+    return {
+      cfg: params.cfg,
+      auth: resolved,
+      persistedGeneratedToken: false,
+      needsSetup: true,
+      sessionSecret,
+    };
+  }
+
+  if (!isDefaultTokenMode) {
+    assertHooksTokenSeparateFromGatewayAuth({ cfg: params.cfg, auth: resolved });
+    return {
+      cfg: params.cfg,
+      auth: resolved,
+      persistedGeneratedToken: false,
+      needsSetup: false,
+      sessionSecret,
+    };
   }
 
   const generatedToken = crypto.randomBytes(24).toString("hex");
@@ -285,6 +319,8 @@ export async function ensureGatewayStartupAuth(params: {
     auth: nextAuth,
     generatedToken,
     persistedGeneratedToken: persist,
+    needsSetup: false,
+    sessionSecret,
   };
 }
 

@@ -67,6 +67,8 @@ import {
 } from "./server/plugins-http.js";
 import type { ReadinessChecker } from "./server/readiness.js";
 import type { GatewayWsClient } from "./server/ws-types.js";
+import { handleSafeSetupRequest } from "./safe-setup-handler.js";
+import { verifySessionToken } from "./safe-session.js";
 import { handleToolsInvokeHttpRequest } from "./tools-invoke-http.js";
 
 type SubsystemLogger = ReturnType<typeof createSubsystemLogger>;
@@ -582,6 +584,10 @@ export function createGatewayHttpServer(opts: {
   rateLimiter?: AuthRateLimiter;
   getReadiness?: ReadinessChecker;
   tlsOptions?: TlsOptions;
+  /** safe-openclaw: when true, block non-local access and show setup page. */
+  needsSetup?: boolean;
+  /** safe-openclaw: HMAC secret for signing/verifying browser session tokens. */
+  sessionSecret?: string;
 }): HttpServer {
   const {
     canvasHost,
@@ -600,6 +606,8 @@ export function createGatewayHttpServer(opts: {
     resolvedAuth,
     rateLimiter,
     getReadiness,
+    needsSetup,
+    sessionSecret,
   } = opts;
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, (req, res) => {
@@ -632,6 +640,55 @@ export function createGatewayHttpServer(opts: {
         req.url = scopedCanvas.rewrittenUrl;
       }
       const requestPath = new URL(req.url ?? "/", "http://localhost").pathname;
+
+      // safe-openclaw: handle setup endpoints and session token validation.
+      if (sessionSecret) {
+        // Always allow setup-related endpoints through (they do their own local check).
+        const setupHandled = await handleSafeSetupRequest(req, res, {
+          needsSetup: needsSetup ?? false,
+          sessionSecret,
+          trustedProxies,
+        });
+        if (setupHandled) return;
+
+        // When setup is required, block all other non-local requests.
+        if (needsSetup) {
+          const isLocal = isLocalDirectRequest(req, trustedProxies, allowRealIpFallback);
+          if (!isLocal) {
+            res.statusCode = 403;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.setHeader("Cache-Control", "no-store");
+            res.end(
+              JSON.stringify({
+                ok: false,
+                error:
+                  "Gateway requires first-time setup. Open http://localhost:<port>/setup from the gateway host.",
+              }),
+            );
+            return;
+          }
+          // Local requests without setup: redirect browser to /setup page.
+          const accept = req.headers.accept ?? "";
+          if (accept.includes("text/html") && requestPath !== "/setup") {
+            res.statusCode = 302;
+            res.setHeader("Location", "/setup");
+            res.end();
+            return;
+          }
+        }
+
+      }
+
+      // safe-openclaw: if a valid signed session token is presented, treat the
+      // request as authenticated (bypass password check for this request only).
+      let effectiveAuth: ResolvedGatewayAuth = resolvedAuth;
+      if (sessionSecret && resolvedAuth.mode === "password") {
+        const bearer = getBearerToken(req);
+        if (bearer && verifySessionToken(sessionSecret, bearer)) {
+          effectiveAuth = { ...resolvedAuth, mode: "none" };
+        }
+      }
+
       const mattermostSlashCallbackPaths = resolveMattermostSlashCallbackPaths(configSnapshot);
       const pluginPathContext = handlePluginRequest
         ? resolvePluginRoutePathContext(requestPath)
@@ -645,7 +702,7 @@ export function createGatewayHttpServer(opts: {
           name: "tools-invoke",
           run: () =>
             handleToolsInvokeHttpRequest(req, res, {
-              auth: resolvedAuth,
+              auth: effectiveAuth,
               trustedProxies,
               allowRealIpFallback,
               rateLimiter,
@@ -661,7 +718,7 @@ export function createGatewayHttpServer(opts: {
           name: "openresponses",
           run: () =>
             handleOpenResponsesHttpRequest(req, res, {
-              auth: resolvedAuth,
+              auth: effectiveAuth,
               config: openResponsesConfig,
               trustedProxies,
               allowRealIpFallback,
@@ -674,7 +731,7 @@ export function createGatewayHttpServer(opts: {
           name: "openai",
           run: () =>
             handleOpenAiHttpRequest(req, res, {
-              auth: resolvedAuth,
+              auth: effectiveAuth,
               config: openAiChatCompletionsConfig,
               trustedProxies,
               allowRealIpFallback,
@@ -691,7 +748,7 @@ export function createGatewayHttpServer(opts: {
             }
             const ok = await authorizeCanvasRequest({
               req,
-              auth: resolvedAuth,
+              auth: effectiveAuth,
               trustedProxies,
               allowRealIpFallback,
               clients,
@@ -727,7 +784,7 @@ export function createGatewayHttpServer(opts: {
           pluginPathContext,
           handlePluginRequest,
           shouldEnforcePluginGatewayAuth,
-          resolvedAuth,
+          resolvedAuth: effectiveAuth,
           trustedProxies,
           allowRealIpFallback,
           rateLimiter,
@@ -761,7 +818,7 @@ export function createGatewayHttpServer(opts: {
             req,
             res,
             requestPath,
-            resolvedAuth,
+            effectiveAuth,
             trustedProxies,
             allowRealIpFallback,
             getReadiness,

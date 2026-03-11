@@ -53,22 +53,20 @@ describe("ensureGatewayStartupAuth", () => {
     expect(mocks.writeConfigFile).not.toHaveBeenCalled();
   }
 
-  it("generates and persists a token when startup auth is missing", async () => {
+  it("enters setup mode (needsSetup=true) when startup auth is missing", async () => {
+    // safe-openclaw: instead of silently auto-generating a token, we require
+    // the user to set a password via the setup page or CLI.
     const result = await ensureGatewayStartupAuth({
       cfg: {},
       env: {} as NodeJS.ProcessEnv,
       persist: true,
     });
 
-    expect(result.generatedToken).toMatch(/^[0-9a-f]{48}$/);
-    expect(result.persistedGeneratedToken).toBe(true);
-    expect(result.auth.mode).toBe("token");
-    expect(mocks.writeConfigFile).toHaveBeenCalledTimes(1);
-    expectGeneratedTokenPersistedToGatewayAuth({
-      generatedToken: result.generatedToken,
-      authToken: result.auth.token,
-      persistedConfig: mocks.writeConfigFile.mock.calls[0]?.[0],
-    });
+    expect(result.needsSetup).toBe(true);
+    expect(result.generatedToken).toBeUndefined();
+    expect(result.persistedGeneratedToken).toBe(false);
+    expect(result.sessionSecret).toMatch(/^[0-9a-f]{64}$/);
+    expect(mocks.writeConfigFile).not.toHaveBeenCalled();
   });
 
   it("does not generate when token already exists", async () => {

@@ -54,6 +54,19 @@ const coreEntries: CoreCliEntry[] = [
   {
     commands: [
       {
+        name: "set-password",
+        description: "safe-openclaw: Set or reset the gateway password (local-only)",
+        hasSubcommands: false,
+      },
+    ],
+    register: async ({ program }) => {
+      const mod = await import("./register.set-password.js");
+      mod.registerSetPasswordCommand(program);
+    },
+  },
+  {
+    commands: [
+      {
         name: "onboard",
         description: "Interactive onboarding wizard for gateway, workspace, and skills",
         hasSubcommands: false,

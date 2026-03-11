@@ -429,6 +429,13 @@ export async function startGatewayServer(
     persist: true,
   });
   cfgAtStart = authBootstrap.cfg;
+  const { needsSetup, sessionSecret } = authBootstrap;
+  if (needsSetup) {
+    log.warn(
+      "⚠️  safe-openclaw: No password configured. Gateway is in setup mode. " +
+        "Open http://localhost:<port>/setup from this machine to set a password.",
+    );
+  }
   if (authBootstrap.generatedToken) {
     if (authBootstrap.persistedGeneratedToken) {
       log.info(
@@ -623,6 +630,8 @@ export async function startGatewayServer(
     logHooks,
     logPlugins,
     getReadiness,
+    needsSetup,
+    sessionSecret,
   });
   let bonjourStop: (() => Promise<void>) | null = null;
   const nodeRegistry = new NodeRegistry();

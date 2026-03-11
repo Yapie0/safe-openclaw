@@ -1,19 +1,20 @@
 {
-  "name": "openclaw",
+  "name": "safe-openclaw",
   "version": "2026.3.9",
-  "description": "Multi-channel AI gateway with extensible messaging integrations",
-  "keywords": [],
-  "homepage": "https://github.com/openclaw/openclaw#readme",
+  "description": "Security-hardened fork of openclaw: mandatory password setup, strong password policy, 3-day session tokens",
+  "keywords": ["openclaw", "security", "gateway", "ai"],
+  "homepage": "https://github.com/Yapie0/safe-openclaw#readme",
   "bugs": {
-    "url": "https://github.com/openclaw/openclaw/issues"
+    "url": "https://github.com/Yapie0/safe-openclaw/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openclaw/openclaw.git"
+    "url": "git+https://github.com/Yapie0/safe-openclaw.git"
   },
   "bin": {
+    "safe-openclaw": "openclaw.mjs",
     "openclaw": "openclaw.mjs"
   },
   "directories": {
