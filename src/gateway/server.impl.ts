@@ -435,6 +435,13 @@ export async function startGatewayServer(
       "⚠️  safe-openclaw: No password configured. Gateway is in setup mode. " +
         "Open http://localhost:<port>/setup from this machine to set a password.",
     );
+  } else if (authBootstrap.auth.mode === "token" && !needsSetup) {
+    // Token mode is less secure than password mode for public-facing gateways.
+    log.warn(
+      "⚠️  safe-openclaw: Gateway is using token auth. " +
+        "Consider switching to password auth for better security: " +
+        "run `safe-openclaw set-password` then restart the gateway.",
+    );
   }
   if (authBootstrap.generatedToken) {
     if (authBootstrap.persistedGeneratedToken) {

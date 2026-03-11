@@ -67,6 +67,19 @@ const coreEntries: CoreCliEntry[] = [
   {
     commands: [
       {
+        name: "migrate",
+        description: "safe-openclaw: Detect existing openclaw install and set a gateway password",
+        hasSubcommands: false,
+      },
+    ],
+    register: async ({ program }) => {
+      const mod = await import("./register.migrate.js");
+      mod.registerMigrateCommand(program);
+    },
+  },
+  {
+    commands: [
+      {
         name: "onboard",
         description: "Interactive onboarding wizard for gateway, workspace, and skills",
         hasSubcommands: false,
