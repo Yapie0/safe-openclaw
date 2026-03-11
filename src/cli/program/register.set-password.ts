@@ -1,8 +1,10 @@
 import type { Command } from "commander";
 import { loadConfig, writeConfigFile } from "../../config/config.js";
+import type { OpenClawConfig } from "../../config/config.js";
+import { hashPassword, getPasswordHashHex, encryptEnvValues } from "../../gateway/safe-crypto.js";
 import { validateStrongPassword } from "../../gateway/safe-password-policy.js";
 import { isLoopbackAddress } from "../../gateway/net.js";
-import { note, outro } from "@clack/prompts";
+import { intro, note, outro, password as promptPw, isCancel } from "@clack/prompts";
 
 function resolveCliPassword(args: { password?: string }): string | null {
   // If --password is given as an argument, use it directly.
@@ -10,22 +12,21 @@ function resolveCliPassword(args: { password?: string }): string | null {
 }
 
 async function promptPassword(): Promise<string | null> {
-  // Avoid importing readline unless needed (CLI only).
-  const readline = await import("node:readline");
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  intro("safe-openclaw: set gateway password");
 
-  const ask = (prompt: string): Promise<string> =>
-    new Promise((resolve) => rl.question(prompt, resolve));
+  const pw = await promptPw({
+    message: "New password",
+    validate: (v) => {
+      if (!v) return "Password is required";
+    },
+  });
+  if (isCancel(pw)) return null;
 
-  // Hide input for passwords
-  process.stdout.write("New password: ");
-  const pw = await ask("");
+  const pw2 = await promptPw({
+    message: "Confirm password",
+  });
+  if (isCancel(pw2)) return null;
 
-  process.stdout.write("\nConfirm password: ");
-  const pw2 = await ask("");
-  process.stdout.write("\n");
-
-  rl.close();
   if (pw !== pw2) {
     console.error("Passwords do not match.");
     return null;
@@ -38,7 +39,7 @@ export function registerSetPasswordCommand(program: Command) {
     .command("set-password")
     .description(
       "safe-openclaw: Set or reset the gateway password (local-only). " +
-        "Switches gateway auth to password mode.",
+        "Hashes the password (SHA-256) and AES-encrypts env tokens.",
     )
     .option("--password <password>", "New password (if not provided, will prompt)")
     .action(async (opts) => {
@@ -64,24 +65,43 @@ export function registerSetPasswordCommand(program: Command) {
         process.exit(1);
       }
 
-      const cfg = loadConfig();
-      const nextCfg = {
+      const cfg: OpenClawConfig = loadConfig();
+
+      // Hash password
+      const passwordHashed = hashPassword(password);
+      const newKeyHex = getPasswordHashHex(passwordHashed);
+
+      // Determine old key for re-encryption (if password was previously set)
+      const oldStoredPassword = cfg.gateway?.auth?.password;
+      const oldKeyHex = oldStoredPassword ? getPasswordHashHex(oldStoredPassword) : undefined;
+
+      // Encrypt env values
+      const encryptedEnv = cfg.env
+        ? encryptEnvValues(cfg.env as Record<string, unknown>, newKeyHex, oldKeyHex)
+        : undefined;
+
+      const nextCfg: OpenClawConfig = {
         ...cfg,
+        env: encryptedEnv ?? cfg.env,
         gateway: {
           ...cfg.gateway,
           auth: {
             ...cfg.gateway?.auth,
             mode: "password" as const,
             token: undefined,
-            password,
+            password: passwordHashed,
           },
         },
       };
 
       try {
         await writeConfigFile(nextCfg);
-        note("Gateway password saved. Restart the gateway for the change to take effect.");
-        outro("Done.");
+        note(
+          "Gateway password hashed and env tokens encrypted.\n" +
+          "Restart the gateway for the change to take effect:\n\n" +
+          "  openclaw gateway stop && openclaw gateway run",
+        );
+        outro("Done. Please restart the gateway.");
       } catch (err) {
         console.error(`error: failed to save config: ${String(err)}`);
         process.exit(1);

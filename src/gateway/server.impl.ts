@@ -19,6 +19,7 @@ import {
   writeConfigFile,
 } from "../config/config.js";
 import { formatConfigIssueLines } from "../config/issue-format.js";
+import { decryptSafeEnvValues } from "./safe-env-decrypt.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { resolveMainSessionKey } from "../config/sessions.js";
 import { clearAgentRunContext, onAgentEvent } from "../infra/agent-events.js";
@@ -419,6 +420,9 @@ export async function startGatewayServer(
       activate: false,
     });
   }
+
+  // safe-openclaw: decrypt AES-encrypted env values before config resolution
+  decryptSafeEnvValues();
 
   cfgAtStart = loadConfig();
   const authBootstrap = await ensureGatewayStartupAuth({

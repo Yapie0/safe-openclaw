@@ -18,6 +18,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { loadConfig, writeConfigFile } from "../config/config.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { isLocalDirectRequest } from "./auth.js";
+import { hashPassword, verifyPassword, getPasswordHashHex, encryptEnvValues } from "./safe-crypto.js";
 import { validateStrongPassword } from "./safe-password-policy.js";
 import { issueSessionToken, verifySessionToken } from "./safe-session.js";
 
@@ -280,7 +281,7 @@ async function handleLogin(
 
   // Verify password against config (read fresh in case it was reset)
   const currentPassword = opts.configPassword || loadConfig().gateway?.auth?.password;
-  if (!currentPassword || password !== currentPassword) {
+  if (!currentPassword || !verifyPassword(password, currentPassword)) {
     sendJson(res, 401, { ok: false, error: "Invalid password" });
     return true;
   }
@@ -325,18 +326,32 @@ async function handleSetPassword(
     return true;
   }
 
-  // Persist password to config
+  // Hash password and encrypt env values before persisting
+  const passwordHashed = hashPassword(password);
+  const newKeyHex = getPasswordHashHex(passwordHashed);
+
   try {
     const cfg: OpenClawConfig = loadConfig();
+
+    // Determine old key for re-encryption (reset case: old password hash is in config)
+    const oldStoredPassword = cfg.gateway?.auth?.password;
+    const oldKeyHex = oldStoredPassword ? getPasswordHashHex(oldStoredPassword) : undefined;
+
+    // Encrypt env values (string entries only; nested objects like shellEnv are skipped)
+    const encryptedEnv = cfg.env
+      ? encryptEnvValues(cfg.env as Record<string, unknown>, newKeyHex, oldKeyHex)
+      : undefined;
+
     const nextCfg: OpenClawConfig = {
       ...cfg,
+      env: encryptedEnv ?? cfg.env,
       gateway: {
         ...cfg.gateway,
         auth: {
           ...cfg.gateway?.auth,
           mode: "password",
           token: undefined,
-          password,
+          password: passwordHashed,
         },
       },
     };

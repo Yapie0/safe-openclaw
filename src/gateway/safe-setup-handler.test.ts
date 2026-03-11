@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { hashPassword, isPasswordHashed, isEncrypted } from "./safe-crypto.js";
 import { issueSessionToken, verifySessionToken } from "./safe-session.js";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -241,7 +242,25 @@ describe("handleSafeAuthGate", () => {
 
       const savedCfg = mocks.writeConfigFile.mock.calls[0]?.[0] as OpenClawConfig;
       expect(savedCfg.gateway?.auth?.mode).toBe("password");
-      expect(savedCfg.gateway?.auth?.password).toBe("Secure1Pass");
+      expect(isPasswordHashed(savedCfg.gateway?.auth?.password as string)).toBe(true);
+    });
+
+    it("encrypts env values on setup", async () => {
+      mocks.loadConfig.mockReturnValue({
+        env: { API_KEY: "sk-test-12345678" },
+      });
+      const req = makeReq({
+        url: "/api/safe/setup",
+        method: "POST",
+        body: { password: "Secure1Pass" },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts({ needsSetup: true }));
+
+      expect(res._status).toBe(200);
+      const savedCfg = mocks.writeConfigFile.mock.calls[0]?.[0] as OpenClawConfig;
+      const savedEnv = savedCfg.env as Record<string, string>;
+      expect(isEncrypted(savedEnv.API_KEY)).toBe(true);
     });
 
     it("returns 409 when already set up", async () => {
@@ -282,7 +301,7 @@ describe("handleSafeAuthGate", () => {
   // ── POST /api/safe/login ───────────────────────────────────────────────
 
   describe("POST /api/safe/login", () => {
-    it("returns session token for correct password", async () => {
+    it("returns session token for correct password (plaintext stored)", async () => {
       const req = makeReq({
         url: "/api/safe/login",
         method: "POST",
@@ -297,6 +316,21 @@ describe("handleSafeAuthGate", () => {
       expect(typeof body.token).toBe("string");
       expect(verifySessionToken(SECRET, body.token as string)).not.toBeNull();
       expect(res._headers["set-cookie"]).toContain("openclaw_session=");
+    });
+
+    it("returns session token for correct password (hashed stored)", async () => {
+      const hashedPassword = hashPassword(CONFIG_PASSWORD);
+      const req = makeReq({
+        url: "/api/safe/login",
+        method: "POST",
+        body: { password: CONFIG_PASSWORD },
+      });
+      const res = makeRes();
+      await handleSafeAuthGate(req, res, gateOpts({ configPassword: hashedPassword }));
+
+      expect(res._status).toBe(200);
+      const body = parsedBody(res);
+      expect(body.ok).toBe(true);
     });
 
     it("returns 401 for wrong password", async () => {
@@ -352,7 +386,7 @@ describe("handleSafeAuthGate", () => {
       expect(typeof body.token).toBe("string");
 
       const savedCfg = mocks.writeConfigFile.mock.calls[0]?.[0] as OpenClawConfig;
-      expect(savedCfg.gateway?.auth?.password).toBe("NewSecure1");
+      expect(isPasswordHashed(savedCfg.gateway?.auth?.password as string)).toBe(true);
     });
 
     it("returns 422 for weak password on reset", async () => {
