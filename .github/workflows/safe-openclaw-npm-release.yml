@@ -63,6 +63,8 @@ jobs:
         run: pnpm build
 
       - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           PKG_VERSION=$(node -p "require('./package.json').version")
