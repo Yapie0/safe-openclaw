@@ -82,7 +82,7 @@ safe-openclaw:
 
 ### 3. Secret redaction in outbound messages
 
-The AI assistant might accidentally echo API keys or passwords in chat responses. safe-openclaw scans all outbound messages and replaces known secret patterns with `[REDACTED]` before delivery to any channel.
+The AI assistant might accidentally echo API keys or passwords in chat responses. safe-openclaw scans all outbound messages and replaces known secret patterns with `**********` before delivery to any channel.
 
 ### 4. Password strength enforcement
 

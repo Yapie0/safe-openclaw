@@ -1,7 +1,7 @@
 # safe-openclaw
 
 > **[openclaw](https://github.com/openclaw/openclaw) 的安全增强版。**
-> openclaw 默认没有任何认证机制，API 密钥以明文存储——把它部署到服务器上，任何人发现你的地址就能完全控制你的 AI 网关，拿走你所有的 API 密钥。
+> openclaw 默认没有任何认证机制，API 密钥以明文存储——把它部署到服务器上，任何人发现你的地址就能完全控制你的 AI 网关，拿走你所有的 API 密钥，造成大额账单。
 > safe-openclaw 在 openclaw 之上构建了完整的安全架构：强制认证网关、AES-256 密钥加密、会话管理、敏感信息过滤、密码保护访问——一键替换，零迁移成本。
 
 中文 | **[English](README.en.md)**
@@ -27,7 +27,7 @@ curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.s
 4. 首次使用会引导你在浏览器设置密码 `http://localhost:18789/setup`
 5. 开发者也可以在终端直接设置密码：`openclaw set-password`
 
-升级后，`openclaw` 命令实际运行的就是 safe-openclaw。你的配置和频道完全不受影响。
+升级后，`openclaw` 命令就完成了一次安全升级。你的配置和频道完全不受影响。
 
 ## 全新安装
 
@@ -62,7 +62,7 @@ openclaw gateway run
 
 ## 安全补丁详情
 
-### 1. 强制密码认证网关
+### 1. 强制密码认证网关（解决公网裸奔问题）
 
 openclaw 首次运行时生成一个随机 token，但从不强制用户设置密码。safe-openclaw 添加了服务端 HTTP 认证网关，在请求到达网关之前拦截**所有**请求。在密码设置完成之前，网关完全锁定（远程请求返回 403）。
 
@@ -82,7 +82,7 @@ safe-openclaw：
 
 ### 3. 聊天消息敏感信息过滤
 
-AI 助手可能会在对话中意外输出 API 密钥或密码。safe-openclaw 会扫描所有发出的消息，将已知的敏感信息替换为 `[REDACTED]`。
+双重防护：即使 API 密钥已加密存储，safe-openclaw 仍会扫描所有发出的消息，匹配已知的敏感信息模式并替换为 `**********`，防止任何形式的密钥泄露。在最极端的情况下，即使攻击者绕过了所有防护，拿到的也只是加密后的密文，而非明文密钥。
 
 ### 4. 密码强度要求
 
