@@ -3,7 +3,6 @@ import { loadConfig, writeConfigFile } from "../../config/config.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { hashPassword, getPasswordHashHex, encryptEnvValues } from "../../gateway/safe-crypto.js";
 import { validateStrongPassword } from "../../gateway/safe-password-policy.js";
-import { isLoopbackAddress } from "../../gateway/net.js";
 import { intro, note, outro, password as promptPw, isCancel } from "@clack/prompts";
 
 function resolveCliPassword(args: { password?: string }): string | null {
