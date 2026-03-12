@@ -37,6 +37,7 @@ A security-hardened fork of [openclaw](https://github.com/openclaw/openclaw) tha
 **Problem:** openclaw allows any string as an auth token, including weak or empty values.
 
 **Fix:** safe-openclaw enforces a password policy on all password set/reset operations:
+
 - Minimum 8 characters
 - At least one uppercase letter
 - At least one lowercase letter
@@ -54,18 +55,18 @@ When the password is changed via the web UI, the gateway detects the config chan
 
 ## What's different
 
-| Feature | openclaw | safe-openclaw |
-|---|---|---|
-| First-time access | No password required | Must set a password before gateway opens |
-| Password storage | Plaintext token in config | SHA-256 hashed with random salt |
-| API token storage | Plaintext in config | AES-256-GCM encrypted with password-derived key |
-| Password strength | None enforced | 8+ chars, upper + lower + digit |
-| Auto-generated token | Silently written to config | Replaced by setup flow |
-| Browser login | Token in URL/localStorage | Password + signed session token (3-day expiry, HttpOnly cookie) |
-| Remote access without setup | Allowed | Blocked (403) |
-| Password reset | No dedicated flow | Web UI + CLI (localhost only) |
-| Secret leakage in chat | No protection | Outbound message redaction |
-| Migration from openclaw | N/A | `migrate` command |
+| Feature                     | openclaw                   | safe-openclaw                                                   |
+| --------------------------- | -------------------------- | --------------------------------------------------------------- |
+| First-time access           | No password required       | Must set a password before gateway opens                        |
+| Password storage            | Plaintext token in config  | SHA-256 hashed with random salt                                 |
+| API token storage           | Plaintext in config        | AES-256-GCM encrypted with password-derived key                 |
+| Password strength           | None enforced              | 8+ chars, upper + lower + digit                                 |
+| Auto-generated token        | Silently written to config | Replaced by setup flow                                          |
+| Browser login               | Token in URL/localStorage  | Password + signed session token (3-day expiry, HttpOnly cookie) |
+| Remote access without setup | Allowed                    | Blocked (403)                                                   |
+| Password reset              | No dedicated flow          | Web UI + CLI (localhost only)                                   |
+| Secret leakage in chat      | No protection              | Outbound message redaction                                      |
+| Migration from openclaw     | N/A                        | `migrate` command                                               |
 
 ## Install
 
@@ -138,6 +139,111 @@ openclaw gateway stop && openclaw gateway run
 ## Session tokens
 
 After login, the browser receives a signed session token valid for **3 days**. The token is stored in an HttpOnly cookie (`openclaw_session`) and also returned in the JSON response for programmatic use as a Bearer token. Restarting the gateway invalidates all existing session tokens (the signing secret rotates on each startup).
+
+## Common setup scenarios
+
+### Initial configuration (doctor)
+
+If the gateway refuses to start with `set gateway.mode=local`, run the interactive setup wizard:
+
+```bash
+openclaw doctor
+```
+
+This configures gateway mode, AI model, API keys, etc. Alternatively, skip the wizard:
+
+```bash
+openclaw gateway run --allow-unconfigured
+```
+
+### Exposing to the public internet
+
+By default the gateway only listens on localhost. To expose it publicly:
+
+1. Set `gateway.bind` to `lan` in `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "gateway": {
+    "bind": "lan"
+  }
+}
+```
+
+2. **Set up HTTPS** — browsers require a secure context for full functionality (device identity, WebSocket). Use nginx or Caddy as a reverse proxy with TLS:
+
+```nginx
+# /etc/nginx/sites-available/openclaw-https
+server {
+    listen 443 ssl;
+    server_name your-domain-or-ip;
+
+    ssl_certificate     /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:18789;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+3. Add `trustedProxies` so the gateway trusts the reverse proxy:
+
+```json
+{
+  "gateway": {
+    "bind": "lan",
+    "trustedProxies": ["127.0.0.1"]
+  }
+}
+```
+
+4. Restart the gateway: `openclaw gateway stop && openclaw gateway run`
+
+### Running as a systemd service
+
+Create `/etc/systemd/system/openclaw-gateway.service`:
+
+```ini
+[Unit]
+Description=safe-openclaw Gateway
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/usr/bin/openclaw gateway run
+Restart=always
+RestartSec=5
+Environment=HOME=/home/ubuntu
+WorkingDirectory=/home/ubuntu
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable openclaw-gateway
+sudo systemctl start openclaw-gateway
+```
+
+### Background scripts
+
+The repo includes helper scripts for quick deployment:
+
+- `daemon.sh` — manage the gateway as a background process (`start`/`stop`/`restart`/`status`/`log`)
+- `installandrun.sh` — one-liner: install + start gateway in background
 
 ## Security notes
 
