@@ -110,15 +110,6 @@ safe-openclaw 正在开发沙箱功能：
 - **资源限制**：防止 AI 无限消耗 CPU、内存或磁盘空间
 - **操作审计日志**：记录 AI 的每一次文件操作、命令执行和网络请求，方便事后审查
 
-## 从 openclaw 迁移
-
-你现有的 `~/.openclaw/` 配置、会话和频道会自动保留。
-
-```bash
-openclaw migrate --check
-openclaw migrate --set-password 'YourStr0ngPass!'
-```
-
 ## 忘记密码
 
 密码重置仅限本机操作：
