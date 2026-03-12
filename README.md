@@ -14,38 +14,54 @@
 
 ## 已经在用 openclaw？一条命令完成安全升级
 
-不需要卸载任何东西。安装脚本会自动检测你已有的 openclaw，原地替换并应用所有安全补丁，重启网关——你的配置、会话、频道全部保留：
+不需要卸载任何东西。安装脚本会自动检测 Node.js 环境和已有的 openclaw，原地替换并应用所有安全补丁——你的配置、会话、频道全部保留：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.sh | bash
 ```
 
 安装脚本做了什么：
-1. safe-openclaw 为 openclaw 做了安全升级（`npm install -g openclaw@npm:safe-openclaw`）
-2. 停止正在运行的网关
-3. 重启网关，安全补丁自动生效
-4. 首次使用会引导你在浏览器设置密码 `http://localhost:18789/setup`
-5. 开发者也可以在终端直接设置密码：`openclaw set-password`
+1. 检查 Node.js >= 22，不满足则自动通过 nvm 安装
+2. safe-openclaw 为 openclaw 做了安全升级（`npm install -g openclaw@npm:safe-openclaw`）
+3. 停止正在运行的网关
+4. 提示下一步操作
 
 升级后，`openclaw` 命令就完成了一次安全升级。你的配置和频道完全不受影响。
 
 ## 全新安装
 
-运行环境：**Node >= 22**
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.sh | bash
+```
+
+或者手动安装（需要 **Node >= 22**）：
 
 ```bash
 npm install -g safe-openclaw
+```
 
-# 方式一：开发者——先在终端设置密码，再启动
+安装后 `openclaw` 和 `safe-openclaw` 两个命令都可以使用。
+
+### 设置密码
+
+```bash
+# 方式一：命令行设置密码
 openclaw set-password
-openclaw gateway run
 
-# 方式二：普通用户——启动网关后在浏览器设置密码
+# 方式二：启动网关后在浏览器设置
 openclaw gateway run
 # 首次访问 http://localhost:18789 会自动跳转到密码设置页面
 ```
 
-安装后 `openclaw` 和 `safe-openclaw` 两个命令都可以使用。
+### 启动网关
+
+```bash
+# 前台运行
+openclaw gateway run
+
+# 后台运行（SSH 断开后不会停止）
+nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
+```
 
 ## 和 openclaw 有什么不同
 

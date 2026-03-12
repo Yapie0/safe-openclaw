@@ -14,38 +14,54 @@
 
 ## Already running openclaw? One command to patch it
 
-No need to uninstall anything. The installer detects your existing openclaw, upgrades it in place with all security patches, and restarts the gateway — your config, sessions, and channels are preserved:
+No need to uninstall anything. The installer checks your Node.js environment and detects your existing openclaw, upgrades it in place with all security patches — your config, sessions, and channels are preserved:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.sh | bash
 ```
 
 What the installer does:
-1. Installs safe-openclaw as a drop-in replacement for openclaw (`npm install -g openclaw@npm:safe-openclaw`)
-2. Stops any running gateway
-3. Restarts the gateway with security patches active
-4. First-time users are prompted to set a password at `http://localhost:18789/setup`
-5. Developers can also set the password from the terminal: `openclaw set-password`
+1. Checks Node.js >= 22, auto-installs via nvm if needed
+2. Installs safe-openclaw as a drop-in replacement for openclaw (`npm install -g openclaw@npm:safe-openclaw`)
+3. Stops any running gateway
+4. Prints next steps
 
 After the upgrade, the `openclaw` command is now safe-openclaw under the hood. All your existing config and channels keep working.
 
 ## Fresh install
 
-Runtime: **Node >= 22**.
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.sh | bash
+```
+
+Or install manually (requires **Node >= 22**):
 
 ```bash
 npm install -g safe-openclaw
+```
 
-# Option A: developers — set password from terminal, then start
+Both `openclaw` and `safe-openclaw` commands are available after install.
+
+### Set a password
+
+```bash
+# Option A: set password from terminal
 openclaw set-password
-openclaw gateway run
 
-# Option B: non-developers — start gateway, set password in browser
+# Option B: start gateway, set password in browser
 openclaw gateway run
 # First visit to http://localhost:18789 → redirected to /setup
 ```
 
-Both `openclaw` and `safe-openclaw` commands are available after install.
+### Start the gateway
+
+```bash
+# Foreground
+openclaw gateway run
+
+# Background (survives SSH disconnect)
+nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
+```
 
 ## What's different
 
