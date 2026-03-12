@@ -27,7 +27,7 @@ CONFIG_FILE="$CONFIG_DIR/openclaw.json"
 
 if [ ! -f "$CONFIG_FILE" ]; then
   err "配置文件不存在: $CONFIG_FILE"
-  info "请先运行 openclaw gateway run 初始化。"
+  info "请先运行 openclaw doctor 初始化配置。"
   exit 1
 fi
 
