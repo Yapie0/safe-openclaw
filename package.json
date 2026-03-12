@@ -1,8 +1,13 @@
 {
   "name": "safe-openclaw",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Security-hardened fork of openclaw: mandatory password setup, strong password policy, 3-day session tokens",
-  "keywords": ["openclaw", "security", "gateway", "ai"],
+  "keywords": [
+    "openclaw",
+    "security",
+    "gateway",
+    "ai"
+  ],
   "homepage": "https://github.com/Yapie0/safe-openclaw#readme",
   "bugs": {
     "url": "https://github.com/Yapie0/safe-openclaw/issues"
