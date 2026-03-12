@@ -1,10 +1,10 @@
+中文 | **[English](README.en.md)**
+
 # safe-openclaw
 
 > **[openclaw](https://github.com/openclaw/openclaw) 的安全增强版。**
 > openclaw 默认没有任何认证机制，API 密钥以明文存储——把它部署到服务器上，任何人发现你的地址就能完全控制你的 AI 网关，拿走你所有的 API 密钥，造成大额账单。
 > safe-openclaw 在 openclaw 之上构建了完整的安全架构：强制认证网关、AES-256 密钥加密、会话管理、敏感信息过滤、密码保护访问——一键替换，零迁移成本。
-
-中文 | **[English](README.en.md)**
 
 <p align="center">
   <a href="https://github.com/Yapie0/safe-openclaw/releases"><img src="https://img.shields.io/github/v/release/Yapie0/safe-openclaw?include_prereleases&style=for-the-badge" alt="GitHub release"></a>

@@ -1,10 +1,10 @@
+**[中文](README.md)** | English
+
 # safe-openclaw
 
 > **Security architecture layer for [openclaw](https://github.com/openclaw/openclaw).**
 > openclaw ships with zero authentication, plaintext API keys, and no secret protection — deploy it on a server and anyone who discovers the URL owns your AI gateway and every API key in it.
 > safe-openclaw adds a full security architecture: mandatory auth gate, AES-256 token encryption, session management, secret redaction, and password-gated access — all as a drop-in replacement with zero config migration.
-
-**[中文](README.md)** | English
 
 <p align="center">
   <a href="https://github.com/Yapie0/safe-openclaw/releases"><img src="https://img.shields.io/github/v/release/Yapie0/safe-openclaw?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
