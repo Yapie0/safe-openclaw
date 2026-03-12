@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.s
 ```
 
 安装脚本做了什么：
-1. 将 safe-openclaw 作为 openclaw 的替代安装（`npm install -g openclaw@npm:safe-openclaw`）
+1. safe-openclaw 为 openclaw 做了安全升级（`npm install -g openclaw@npm:safe-openclaw`）
 2. 停止正在运行的网关
 3. 重启网关，安全补丁自动生效
 4. 首次使用会引导你在浏览器设置密码 `http://localhost:18789/setup`
