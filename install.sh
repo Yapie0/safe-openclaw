@@ -86,24 +86,53 @@ if [ "$(id -u)" -ne 0 ]; then
   fi
 fi
 
-# Uninstall upstream openclaw first to avoid conflicts
-if npm ls -g openclaw --depth=0 &>/dev/null 2>&1; then
-  echo ""
-  echo "Removing upstream openclaw to avoid conflicts..."
-  $SUDO npm uninstall -g openclaw 2>/dev/null || true
-fi
+# Uninstall upstream openclaw from all known npm prefixes
+uninstall_upstream_openclaw() {
+  # Try npm ls first (covers the current npm prefix)
+  if npm ls -g openclaw --depth=0 &>/dev/null 2>&1; then
+    echo "  Removing upstream openclaw (npm prefix: $(npm prefix -g))..."
+    $SUDO npm uninstall -g openclaw 2>/dev/null || true
+  fi
+  # Also check if an openclaw binary exists elsewhere in PATH that is NOT safe-openclaw
+  local existing
+  existing=$(command -v openclaw 2>/dev/null || true)
+  if [ -n "$existing" ]; then
+    # If it's a symlink to safe-openclaw, it's ours — skip
+    if readlink "$existing" 2>/dev/null | grep -q safe-openclaw; then
+      return
+    fi
+    # Check if it's the upstream package by looking for set-password command
+    if ! "$existing" set-password --help &>/dev/null 2>&1; then
+      echo "  Found upstream openclaw at $existing, replacing..."
+      $SUDO rm -f "$existing"
+    fi
+  fi
+}
+
+echo ""
+echo "Removing upstream openclaw to avoid conflicts..."
+uninstall_upstream_openclaw
 
 echo ""
 echo "[2/3] Installing safe-openclaw..."
 $SUDO npm install -g safe-openclaw
 
-# Create 'openclaw' symlink so both commands work
+# Replace ALL openclaw binaries in PATH with symlinks to safe-openclaw
 SAFE_BIN=$(command -v safe-openclaw 2>/dev/null)
 if [ -n "$SAFE_BIN" ]; then
+  # Link in the same directory as safe-openclaw
   BIN_DIR=$(dirname "$SAFE_BIN")
-  if [ ! -e "$BIN_DIR/openclaw" ] || readlink "$BIN_DIR/openclaw" 2>/dev/null | grep -q safe-openclaw; then
-    $SUDO ln -sf "$SAFE_BIN" "$BIN_DIR/openclaw"
-    echo "  Linked openclaw -> safe-openclaw"
+  $SUDO ln -sf "$SAFE_BIN" "$BIN_DIR/openclaw"
+  echo "  Linked $BIN_DIR/openclaw -> safe-openclaw"
+
+  # Check if another openclaw still shadows ours in PATH
+  ACTUAL=$(command -v openclaw 2>/dev/null || true)
+  if [ -n "$ACTUAL" ] && [ "$ACTUAL" != "$BIN_DIR/openclaw" ]; then
+    # Another openclaw exists at a higher-priority PATH location
+    if ! readlink "$ACTUAL" 2>/dev/null | grep -q safe-openclaw; then
+      echo "  Replacing shadowing openclaw at $ACTUAL..."
+      $SUDO ln -sf "$SAFE_BIN" "$ACTUAL"
+    fi
   fi
 fi
 
