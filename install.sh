@@ -76,23 +76,25 @@ fi
 
 # ── Install ──────────────────────────────────────────────────────────────────
 
-# Check if openclaw is already installed
-HAS_OPENCLAW=false
-if command -v openclaw &>/dev/null; then
-  HAS_OPENCLAW=true
+# Uninstall upstream openclaw first to avoid conflicts
+if npm ls -g openclaw --depth=0 &>/dev/null 2>&1; then
   echo ""
-  echo "Detected existing openclaw installation, will upgrade in place."
+  echo "Removing upstream openclaw to avoid conflicts..."
+  npm uninstall -g openclaw 2>/dev/null || true
 fi
 
 echo ""
 echo "[2/3] Installing safe-openclaw..."
-npm install -g openclaw@npm:safe-openclaw
+npm install -g safe-openclaw
 
-# If user didn't have openclaw before, also install under safe-openclaw name
-# so both commands work
-if [ "$HAS_OPENCLAW" = false ]; then
-  echo "  First-time install: registering both 'openclaw' and 'safe-openclaw' commands."
-  npm install -g safe-openclaw
+# Create 'openclaw' symlink so both commands work
+SAFE_BIN=$(command -v safe-openclaw 2>/dev/null)
+if [ -n "$SAFE_BIN" ]; then
+  BIN_DIR=$(dirname "$SAFE_BIN")
+  if [ ! -e "$BIN_DIR/openclaw" ] || readlink "$BIN_DIR/openclaw" 2>/dev/null | grep -q safe-openclaw; then
+    ln -sf "$SAFE_BIN" "$BIN_DIR/openclaw"
+    echo "  Linked openclaw -> safe-openclaw"
+  fi
 fi
 
 # Stop running gateway (if any)
@@ -102,8 +104,15 @@ sleep 1
 # Verify
 echo ""
 echo "[3/3] Verifying installation..."
-echo "  openclaw:      $(command -v openclaw 2>/dev/null || echo 'not found')"
 echo "  safe-openclaw:  $(command -v safe-openclaw 2>/dev/null || echo 'not found')"
+echo "  openclaw:       $(command -v openclaw 2>/dev/null || echo 'not found')"
+
+if ! command -v safe-openclaw &>/dev/null; then
+  echo ""
+  echo "  ERROR: Installation failed. safe-openclaw command not found."
+  echo "  Try: npm install -g safe-openclaw"
+  exit 1
+fi
 
 echo ""
 echo "=== Installation complete ==="
