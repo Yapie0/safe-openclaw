@@ -21,10 +21,12 @@ curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.s
 ```
 
 What the installer does:
+
 1. Checks Node.js >= 22, auto-installs via nvm if needed
-2. Installs safe-openclaw as a drop-in replacement for openclaw (`npm install -g openclaw@npm:safe-openclaw`)
-3. Stops any running gateway
-4. Prints next steps
+2. Stops any running gateway
+3. Uninstalls upstream openclaw and installs safe-openclaw (`npm install -g safe-openclaw`)
+4. Creates `openclaw` symlink so both commands work
+5. Prints next steps
 
 After the upgrade, the `openclaw` command is now safe-openclaw under the hood. All your existing config and channels keep working.
 
@@ -65,16 +67,16 @@ nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 
 ## What's different
 
-| Feature | openclaw | safe-openclaw |
-|---|---|---|
-| First-time access | No password required | Must set a password before gateway opens |
-| Password storage | Plaintext token in config | SHA-256 hashed with random salt |
-| API token storage | Plaintext in config | AES-256-GCM encrypted with password-derived key |
-| Password strength | None enforced | 8+ chars, upper + lower + digit |
-| Browser login | Token in URL/localStorage | Password + signed session token (3-day expiry, HttpOnly cookie) |
-| Remote access without setup | Allowed | Blocked (403) |
-| Password reset | No dedicated flow | Web UI + CLI (localhost only) |
-| Secret leakage in chat | No protection | Outbound message redaction |
+| Feature                     | openclaw                  | safe-openclaw                                                   |
+| --------------------------- | ------------------------- | --------------------------------------------------------------- |
+| First-time access           | No password required      | Must set a password before gateway opens                        |
+| Password storage            | Plaintext token in config | SHA-256 hashed with random salt                                 |
+| API token storage           | Plaintext in config       | AES-256-GCM encrypted with password-derived key                 |
+| Password strength           | None enforced             | 8+ chars, upper + lower + digit                                 |
+| Browser login               | Token in URL/localStorage | Password + signed session token (3-day expiry, HttpOnly cookie) |
+| Remote access without setup | Allowed                   | Blocked (403)                                                   |
+| Password reset              | No dedicated flow         | Web UI + CLI (localhost only)                                   |
+| Secret leakage in chat      | No protection             | Outbound message redaction                                      |
 
 ## Security patches
 
@@ -92,6 +94,7 @@ openclaw generates a random token on first run but never forces the user to set 
 openclaw stores the auth token and all model API keys in **plaintext** in `~/.openclaw/openclaw.json`.
 
 safe-openclaw:
+
 - Hashes passwords with **SHA-256** (random salt): `sha256:<salt>:<hash>`
 - Encrypts all model API tokens with **AES-256-GCM** using a password-derived key: `aes256gcm:<iv>:<authTag>:<ciphertext>`
 - Re-encrypts all tokens when the password changes
@@ -148,6 +151,119 @@ pnpm build
 
 pnpm openclaw gateway run
 ```
+
+## Common operations
+
+### Initial configuration (doctor)
+
+If the gateway refuses to start with `set gateway.mode=local`, run the interactive setup wizard:
+
+```bash
+openclaw doctor
+```
+
+This guides you through gateway mode, AI model, and API key configuration.
+
+Or skip the wizard and start directly:
+
+```bash
+openclaw gateway run --allow-unconfigured
+```
+
+> **Note:** safe-openclaw 1.0.8+ defaults to local mode automatically, so this is usually not needed.
+
+### Exposing to the public internet
+
+By default the gateway only listens on localhost. To expose it publicly:
+
+**1. Set `gateway.bind` to `lan` in `~/.openclaw/openclaw.json`:**
+
+```json
+{
+  "gateway": {
+    "bind": "lan"
+  }
+}
+```
+
+**2. Set up HTTPS** — browsers require a secure context for full functionality:
+
+```nginx
+# /etc/nginx/sites-available/openclaw-https
+server {
+    listen 443 ssl;
+    server_name your-domain-or-ip;
+
+    ssl_certificate     /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:18789;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 86400;
+    }
+}
+```
+
+**3. Add `trustedProxies` so the gateway trusts the reverse proxy:**
+
+```json
+{
+  "gateway": {
+    "bind": "lan",
+    "trustedProxies": ["127.0.0.1"]
+  }
+}
+```
+
+**4. Restart the gateway:**
+
+```bash
+openclaw gateway stop && openclaw gateway run
+```
+
+### Running as a systemd service
+
+Create `/etc/systemd/system/openclaw-gateway.service`:
+
+```ini
+[Unit]
+Description=safe-openclaw Gateway
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/usr/bin/openclaw gateway run
+Restart=always
+RestartSec=5
+Environment=HOME=/home/ubuntu
+WorkingDirectory=/home/ubuntu
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable openclaw-gateway
+sudo systemctl start openclaw-gateway
+```
+
+### Background scripts
+
+The repo includes helper scripts for quick deployment:
+
+- `daemon.sh` — manage the gateway as a background process (`start`/`stop`/`restart`/`status`/`log`)
+- `installandrun.sh` — one-liner: install + start gateway in background
 
 ## Everything else
 
