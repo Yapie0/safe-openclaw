@@ -6,6 +6,7 @@
 ## What is safe-openclaw
 
 Security-hardened fork of openclaw. Key additions:
+
 - Mandatory password auth gate (`src/gateway/safe-setup-handler.ts`)
 - SHA-256 password hashing + AES-256-GCM API token encryption
 - Secret redaction in outbound messages
@@ -13,7 +14,7 @@ Security-hardened fork of openclaw. Key additions:
 - Password strength enforcement
 - Auto-restart on password change
 
-See `SAFE-OPENCLAW.md` for full security patches documentation.
+See `README.en.md` for full security patches documentation.
 
 ## Key files (safe-openclaw additions)
 
@@ -21,7 +22,7 @@ See `SAFE-OPENCLAW.md` for full security patches documentation.
 - `src/gateway/safe-password-policy.ts` — password strength validation
 - `src/gateway/safe-session.ts` — HMAC session tokens
 - `src/cli/program/register.set-password.ts` — CLI set-password command
-- `SAFE-OPENCLAW.md` — security patches documentation
+- `README.en.md` — security patches documentation
 - `.github/workflows/safe-openclaw-npm-release.yml` — npm publish CI (triggers on `v*` tags)
 
 ## User preferences
