@@ -151,6 +151,10 @@ pnpm openclaw gateway run
 
 openclaw 的所有功能（频道、技能、代理、工具、应用）完全正常使用。详见 [openclaw 文档](https://docs.openclaw.ai)。
 
+## 反馈与 Bug 报告
+
+遇到问题或有建议？请访问 [反馈页面](https://ai6666.com/feedback/) 提交。
+
 ## 许可证
 
 [MIT](LICENSE)
