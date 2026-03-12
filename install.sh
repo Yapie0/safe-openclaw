@@ -109,6 +109,13 @@ uninstall_upstream_openclaw() {
   fi
 }
 
+# Stop running gateway before install to avoid file locks and conflicts
+if command -v openclaw &>/dev/null; then
+  openclaw gateway stop 2>/dev/null && echo "  Stopped gateway via CLI." || true
+fi
+pkill -f "openclaw gateway" 2>/dev/null || true
+sleep 1
+
 echo ""
 echo "Removing upstream openclaw to avoid conflicts..."
 uninstall_upstream_openclaw
@@ -135,10 +142,6 @@ if [ -n "$SAFE_BIN" ]; then
     fi
   fi
 fi
-
-# Stop running gateway (if any)
-pkill -f "openclaw gateway" 2>/dev/null && echo "  Stopped existing gateway." || true
-sleep 1
 
 # Verify
 echo ""
