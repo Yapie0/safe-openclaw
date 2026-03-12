@@ -76,23 +76,33 @@ fi
 
 # ── Install ──────────────────────────────────────────────────────────────────
 
+# Use sudo for npm global installs when not root and Node is system-installed
+SUDO=""
+if [ "$(id -u)" -ne 0 ]; then
+  NPM_GLOBAL_DIR=$(npm prefix -g 2>/dev/null || echo "/usr/local")
+  if [ ! -w "$NPM_GLOBAL_DIR/lib" ] 2>/dev/null; then
+    SUDO="sudo"
+    echo "  Non-root user detected, will use sudo for npm install."
+  fi
+fi
+
 # Uninstall upstream openclaw first to avoid conflicts
 if npm ls -g openclaw --depth=0 &>/dev/null 2>&1; then
   echo ""
   echo "Removing upstream openclaw to avoid conflicts..."
-  npm uninstall -g openclaw 2>/dev/null || true
+  $SUDO npm uninstall -g openclaw 2>/dev/null || true
 fi
 
 echo ""
 echo "[2/3] Installing safe-openclaw..."
-npm install -g safe-openclaw
+$SUDO npm install -g safe-openclaw
 
 # Create 'openclaw' symlink so both commands work
 SAFE_BIN=$(command -v safe-openclaw 2>/dev/null)
 if [ -n "$SAFE_BIN" ]; then
   BIN_DIR=$(dirname "$SAFE_BIN")
   if [ ! -e "$BIN_DIR/openclaw" ] || readlink "$BIN_DIR/openclaw" 2>/dev/null | grep -q safe-openclaw; then
-    ln -sf "$SAFE_BIN" "$BIN_DIR/openclaw"
+    $SUDO ln -sf "$SAFE_BIN" "$BIN_DIR/openclaw"
     echo "  Linked openclaw -> safe-openclaw"
   fi
 fi
