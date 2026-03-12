@@ -1,15 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
 import type { Command } from "commander";
 import { readSecretFromFile } from "../../acp/secret-file.js";
 import type { GatewayAuthMode, GatewayTailscaleMode } from "../../config/config.js";
-import {
-  CONFIG_PATH,
-  loadConfig,
-  readConfigFileSnapshot,
-  resolveStateDir,
-  resolveGatewayPort,
-} from "../../config/config.js";
+import { loadConfig, readConfigFileSnapshot, resolveGatewayPort } from "../../config/config.js";
 import { hasConfiguredSecretInput } from "../../config/types.secrets.js";
 import { resolveGatewayAuth } from "../../gateway/auth.js";
 import { startGatewayServer } from "../../gateway/server.js";
@@ -312,22 +304,11 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   const tokenRaw = toOptionString(opts.token);
 
   const snapshot = await readConfigFileSnapshot().catch(() => null);
-  const configExists = snapshot?.exists ?? fs.existsSync(CONFIG_PATH);
-  const configAuditPath = path.join(resolveStateDir(process.env), "logs", "config-audit.jsonl");
   const mode = cfg.gateway?.mode;
+  // safe-openclaw: auto-default to local mode so `openclaw gateway run` works
+  // out of the box without requiring `openclaw doctor` or `--allow-unconfigured`.
   if (!opts.allowUnconfigured && mode !== "local") {
-    if (!configExists) {
-      defaultRuntime.error(
-        `Missing config. Run \`${formatCliCommand("openclaw setup")}\` or set gateway.mode=local (or pass --allow-unconfigured).`,
-      );
-    } else {
-      defaultRuntime.error(
-        `Gateway start blocked: set gateway.mode=local (current: ${mode ?? "unset"}) or pass --allow-unconfigured.`,
-      );
-      defaultRuntime.error(`Config write audit: ${configAuditPath}`);
-    }
-    defaultRuntime.exit(1);
-    return;
+    cfg.gateway = { ...cfg.gateway, mode: "local" as const };
   }
   const miskeys = extractGatewayMiskeys(snapshot?.parsed);
   const authOverride =
