@@ -67,16 +67,37 @@ nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 
 ## What's different
 
-| Feature                     | openclaw                  | safe-openclaw                                                   |
-| --------------------------- | ------------------------- | --------------------------------------------------------------- |
-| First-time access           | No password required      | Must set a password before gateway opens                        |
-| Password storage            | Plaintext token in config | SHA-256 hashed with random salt                                 |
-| API token storage           | Plaintext in config       | AES-256-GCM encrypted with password-derived key                 |
-| Password strength           | None enforced             | 8+ chars, upper + lower + digit                                 |
-| Browser login               | Token in URL/localStorage | Password + signed session token (3-day expiry, HttpOnly cookie) |
-| Remote access without setup | Allowed                   | Blocked (403)                                                   |
-| Password reset              | No dedicated flow         | Web UI + CLI (localhost only)                                   |
-| Secret leakage in chat      | No protection             | Outbound message redaction                                      |
+| Feature                     | openclaw                  | safe-openclaw                                                    |
+| --------------------------- | ------------------------- | ---------------------------------------------------------------- |
+| First-time access           | No password required      | Must set a password before gateway opens                         |
+| Password storage            | Plaintext token in config | SHA-256 hashed with random salt                                  |
+| API token storage           | Plaintext in config       | AES-256-GCM encrypted with password-derived key                  |
+| Password strength           | None enforced             | 8+ chars, upper + lower + digit                                  |
+| Browser login               | Token in URL/localStorage | Password + signed session token (3-day expiry, HttpOnly cookie)  |
+| Remote access without setup | Allowed                   | Blocked (403)                                                    |
+| Password reset              | No dedicated flow         | Web UI + CLI (localhost only)                                    |
+| Secret leakage in chat      | No protection             | Outbound message redaction                                       |
+| Model API configuration     | Manually edit JSON config | One command: interactive setup, connection test, auto-encryption |
+
+## One-command model API setup
+
+After installing and setting a password, configure any model's API key with a single command — interactive provider selection, automatic connection test with a real `hello` message, and AES-256-GCM encrypted storage:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/safe-set-model.sh | bash
+```
+
+Supported providers: **Anthropic**, **OpenAI**, **Google Gemini**, **Qwen (Tongyi)**, **DeepSeek**, **OpenRouter**, **Mistral**, **xAI (Grok)**, **Together**, **OpenCode**.
+
+The script will:
+
+1. Verify a password hash exists (prompts to run `openclaw set-password` if not)
+2. Let you pick a provider, enter Base URL and API Key
+3. Send `hello` to the model and display its reply to verify connectivity
+4. Encrypt the API Key with AES-256-GCM using the existing password hash
+5. Write `models.providers` config and set it as the default model
+
+Run it multiple times to configure different providers. Custom Base URLs are supported for proxies and mirrors.
 
 ## Security patches
 

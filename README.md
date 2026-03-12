@@ -77,6 +77,40 @@ nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 | 未设置时的远程访问 | 允许                        | 拒绝（403）                                      |
 | 密码重置           | 无专用流程                  | Web 界面 + 命令行（仅限本机）                    |
 | 聊天中的密钥泄露   | 无保护                      | 自动过滤敏感信息                                 |
+| 大模型 API 配置    | 手动编辑 JSON 配置文件      | 一条命令交互式配置，自动连接测试，自动加密存储   |
+
+## 一键配置大模型 API
+
+安装完成、设好密码后，一条命令即可配置任意大模型的 API Key——交互式选择 provider，自动发送测试消息验证连通性，API Key 自动 AES-256-GCM 加密存储：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/safe-set-model.sh | bash
+```
+
+支持的 Provider：
+
+| Provider        | 默认 Base URL                                       | 环境变量              |
+| --------------- | --------------------------------------------------- | --------------------- |
+| Anthropic       | `https://api.anthropic.com`                         | `ANTHROPIC_API_KEY`   |
+| OpenAI          | `https://api.openai.com/v1`                         | `OPENAI_API_KEY`      |
+| Google Gemini   | `https://generativelanguage.googleapis.com`         | `GEMINI_API_KEY`      |
+| 通义千问 (Qwen) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `QWEN_PORTAL_API_KEY` |
+| DeepSeek        | `https://api.deepseek.com/v1`                       | `OPENAI_API_KEY`      |
+| OpenRouter      | `https://openrouter.ai/api/v1`                      | `OPENROUTER_API_KEY`  |
+| Mistral         | `https://api.mistral.ai/v1`                         | `MISTRAL_API_KEY`     |
+| xAI (Grok)      | `https://api.x.ai/v1`                               | `XAI_API_KEY`         |
+| Together        | `https://api.together.xyz/v1`                       | `TOGETHER_API_KEY`    |
+| OpenCode        | `https://opencode.ai/zen/v1`                        | `OPENCODE_API_KEY`    |
+
+脚本会自动：
+
+1. 检查密码是否已设置（未设置则提示先执行 `openclaw set-password`）
+2. 让你选择 Provider、输入 Base URL 和 API Key
+3. 向模型发送 `hello` 验证连通性，并显示模型回复
+4. 用已有密码的 SHA-256 哈希作为密钥，AES-256-GCM 加密 API Key 后写入配置
+5. 自动配置 `models.providers`，设置为默认模型
+
+可以多次运行来配置不同的 Provider。Base URL 支持自定义，方便接入国内镜像或代理。
 
 ## 安全补丁详情
 
