@@ -55,6 +55,16 @@ openclaw gateway run
 # 首次访问 http://localhost:18789 会自动跳转到密码设置页面
 ```
 
+### 配置大模型 API Key
+
+设好密码后，一条命令配置你的大模型 API Key（自动加密存储）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/safe-set-model.sh | bash
+```
+
+支持 Anthropic、OpenAI、Google Gemini、通义千问、DeepSeek、OpenRouter 等 10 种 Provider。详见下方[一键配置大模型 API](#一键配置大模型-api) 章节。
+
 ### 启动网关
 
 ```bash

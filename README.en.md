@@ -55,6 +55,16 @@ openclaw gateway run
 # First visit to http://localhost:18789 → redirected to /setup
 ```
 
+### Configure model API key
+
+After setting a password, configure your model API key with one command (auto-encrypted):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/safe-set-model.sh | bash
+```
+
+Supports Anthropic, OpenAI, Google Gemini, Qwen, DeepSeek, OpenRouter, and more. See [One-command model API setup](#one-command-model-api-setup) below.
+
 ### Start the gateway
 
 ```bash
