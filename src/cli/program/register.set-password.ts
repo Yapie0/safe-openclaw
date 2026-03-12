@@ -43,14 +43,9 @@ export function registerSetPasswordCommand(program: Command) {
     )
     .option("--password <password>", "New password (if not provided, will prompt)")
     .action(async (opts) => {
-      // Guard: only allow from local machine
-      const remoteAddr = (process.env.SSH_CLIENT ?? "").split(" ")[0] ?? "";
-      if (remoteAddr && !isLoopbackAddress(remoteAddr)) {
-        console.error(
-          "error: set-password must be run directly on the gateway host, not over SSH.",
-        );
-        process.exit(1);
-      }
+      // CLI set-password is allowed from SSH sessions since the user
+      // has already authenticated to the host (e.g. key-based SSH).
+      // The security boundary is the host itself, not the transport.
 
       const password = resolveCliPassword({ password: opts.password as string | undefined })
         ?? (await promptPassword());

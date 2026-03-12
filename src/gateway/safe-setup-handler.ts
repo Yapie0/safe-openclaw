@@ -230,6 +230,7 @@ async function handleSafeEndpoint(
   // POST /api/safe/logout — clear session cookie
   if (pathname === SAFE_LOGOUT_PATH && method === "POST") {
     clearSessionCookie(res);
+    console.log("[safe-openclaw] user logged out");
     sendJson(res, 200, { ok: true });
     return true;
   }

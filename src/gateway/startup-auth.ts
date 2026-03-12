@@ -267,7 +267,11 @@ export async function ensureGatewayStartupAuth(params: {
   // safe-openclaw: password mode with no password also needs first-time setup.
   const isPasswordModeNoPassword =
     resolved.mode === "password" && !resolved.password;
-  if ((isDefaultTokenMode && resolved.modeSource === "default") || isPasswordModeNoPassword) {
+  // safe-openclaw: token mode (e.g. after upgrading from openclaw) also needs
+  // password setup — token-only auth is not considered secure.
+  const isTokenModeNeedsPassword =
+    resolved.mode === "token" && !resolved.password;
+  if ((isDefaultTokenMode && resolved.modeSource === "default") || isPasswordModeNoPassword || isTokenModeNeedsPassword) {
     // No usable auth configured — require first-time password setup.
     assertHooksTokenSeparateFromGatewayAuth({ cfg: params.cfg, auth: resolved });
     return {
