@@ -132,7 +132,18 @@ function shouldAllowSilentLocalPairing(params: {
   isControlUi: boolean;
   isWebchat: boolean;
   reason: "not-paired" | "role-upgrade" | "scope-upgrade" | "metadata-upgrade";
+  authMode?: string;
 }): boolean {
+  // safe-openclaw: when password auth is active, auto-approve pairing for
+  // control UI / webchat connections — the user already proved identity
+  // via password login, so manual device approval is redundant friction.
+  if (
+    params.authMode === "password" &&
+    (params.isControlUi || params.isWebchat) &&
+    (params.reason === "not-paired" || params.reason === "scope-upgrade")
+  ) {
+    return true;
+  }
   return (
     params.isLocalClient &&
     (!params.hasBrowserOriginHeader || params.isControlUi || params.isWebchat) &&
@@ -841,6 +852,7 @@ export function attachGatewayWsMessageHandler(params: {
               isControlUi,
               isWebchat,
               reason,
+              authMode: resolvedAuth.mode,
             });
             const pairing = await requestDevicePairing({
               deviceId: device.id,
