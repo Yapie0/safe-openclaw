@@ -107,12 +107,8 @@ const LEAK_RULES: LeakRule[] = [
   {
     id: "private-key-pem",
     message: "PEM private key",
-    pattern: /-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g,
-  },
-  {
-    id: "ssh-private-key",
-    message: "SSH private key content",
-    pattern: /-----BEGIN OPENSSH PRIVATE KEY-----/g,
+    pattern:
+      /-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]*?-----END (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g,
   },
 
   // ── Passwords and tokens in URLs ────────────────────────────────

@@ -39,9 +39,19 @@ describe("scanForLeaks", () => {
     expect(m.some((r) => r.ruleId === "slack-token")).toBe(true);
   });
 
-  it("detects PEM private key", () => {
-    const m = scanForLeaks("-----BEGIN RSA PRIVATE KEY-----");
+  it("detects full PEM private key block", () => {
+    const pem =
+      "-----BEGIN RSA PRIVATE KEY-----\nMIIBogIBAAJ...base64data...\n-----END RSA PRIVATE KEY-----";
+    const m = scanForLeaks(pem);
     expect(m.some((r) => r.ruleId === "private-key-pem")).toBe(true);
+  });
+
+  it("redacts entire PEM block, not just header", () => {
+    const pem =
+      "before -----BEGIN RSA PRIVATE KEY-----\nSECRETDATA\n-----END RSA PRIVATE KEY----- after";
+    const result = redactLeaks(pem);
+    expect(result).not.toContain("SECRETDATA");
+    expect(result).toContain("[REDACTED:private-key-pem]");
   });
 
   it("detects URL credentials", () => {

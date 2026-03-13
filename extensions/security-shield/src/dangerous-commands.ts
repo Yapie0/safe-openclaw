@@ -35,7 +35,8 @@ const RULES: Rule[] = [
     id: "rm-force-root",
     severity: "critical",
     message: "Forced removal of root or home directory",
-    pattern: /\brm\s+-[a-zA-Z]*f[a-zA-Z]*\s+[/~]/,
+    pattern:
+      /\brm\s+-[a-zA-Z]*f[a-zA-Z]*\s+(\/\s|\/\*|~\/|\/etc|\/usr|\/var|\/boot|\/home|\/root)\b/,
   },
   {
     id: "mkfs",

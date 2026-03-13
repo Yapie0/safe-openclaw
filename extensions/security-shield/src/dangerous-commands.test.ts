@@ -91,6 +91,11 @@ describe("scanForDangerousCommands", () => {
     expect(m.length).toBe(0);
   });
 
+  it("does not flag rm -f on normal paths", () => {
+    const m = scanForDangerousCommands('{"command": "rm -f /tmp/cache.txt"}');
+    expect(m.some((r) => r.ruleId === "rm-force-root")).toBe(false);
+  });
+
   it("does not flag empty input", () => {
     const m = scanForDangerousCommands("{}");
     expect(m.length).toBe(0);

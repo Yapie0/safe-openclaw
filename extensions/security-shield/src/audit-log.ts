@@ -6,7 +6,7 @@
  * any security findings, and whether the call was blocked.
  */
 
-import { existsSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, mkdirSync, appendFileSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -49,7 +49,10 @@ export function writeAuditEntry(entry: AuditEntry): void {
           ? entry.params.slice(0, MAX_PARAMS_LENGTH) + "...(truncated)"
           : entry.params,
     });
-    appendFileSync(getLogPath(), line + "\n", "utf-8");
+    const path = getLogPath();
+    const isNew = !existsSync(path);
+    appendFileSync(path, line + "\n", { encoding: "utf-8", mode: 0o600 });
+    if (isNew) chmodSync(path, 0o600);
   } catch {
     // Audit logging should never break tool execution
   }
