@@ -58,7 +58,8 @@ const LEAK_RULES: LeakRule[] = [
   {
     id: "aws-secret-key",
     message: "AWS secret key",
-    pattern: /\b[A-Za-z0-9/+=]{40}\b/g, // This is intentionally broad; only triggered near AKIA
+    pattern:
+      /(?:aws_secret_access_key|AWS_SECRET_ACCESS_KEY|SecretAccessKey)\s*[:=]\s*['"]?([A-Za-z0-9/+=]{40})['"]?/g,
   },
   {
     id: "stripe-key",
@@ -93,7 +94,8 @@ const LEAK_RULES: LeakRule[] = [
   {
     id: "heroku-key",
     message: "Heroku API key",
-    pattern: /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g,
+    pattern:
+      /(?:HEROKU_API_KEY|heroku_api_key)\s*[:=]\s*['"]?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})['"]?/gi,
   },
   {
     id: "deepseek-key",
@@ -105,12 +107,8 @@ const LEAK_RULES: LeakRule[] = [
   {
     id: "private-key-pem",
     message: "PEM private key",
-    pattern: /-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g,
-  },
-  {
-    id: "ssh-private-key",
-    message: "SSH private key content",
-    pattern: /-----BEGIN OPENSSH PRIVATE KEY-----/g,
+    pattern:
+      /-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]*?-----END (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g,
   },
 
   // ── Passwords and tokens in URLs ────────────────────────────────

@@ -35,7 +35,8 @@ const RULES: Rule[] = [
     id: "rm-force-root",
     severity: "critical",
     message: "Forced removal of root or home directory",
-    pattern: /\brm\s+-[a-zA-Z]*f[a-zA-Z]*\s+[/~]/,
+    pattern:
+      /\brm\s+-[a-zA-Z]*f[a-zA-Z]*\s+(\/\s|\/\*|~\/|\/etc|\/usr|\/var|\/boot|\/home|\/root)\b/,
   },
   {
     id: "mkfs",
@@ -141,7 +142,7 @@ const RULES: Rule[] = [
     id: "reverse-shell",
     severity: "critical",
     message: "Reverse shell pattern detected",
-    pattern: /\b(bash\s+-i\s+>&|\/dev\/tcp\/|nc\s+-[a-z]*e)\b/,
+    pattern: /\bbash\s+-i\s+>&|\/dev\/tcp\/|\bnc\s+-[a-z]*e\b/,
   },
   {
     id: "base64-decode-pipe",
