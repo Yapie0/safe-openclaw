@@ -342,6 +342,23 @@ sudo systemctl start openclaw-gateway
 - `daemon.sh` — 管理后台网关进程（`start`/`stop`/`restart`/`status`/`log`）
 - `installandrun.sh` — 一键安装 + 后台启动
 
+## 卸载 safe-openclaw
+
+如果要卸载 safe-openclaw 并恢复上游 openclaw：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/uninstall.sh | bash
+```
+
+卸载脚本会：
+
+1. 停止正在运行的网关
+2. 卸载 safe-openclaw npm 包
+3. 安装上游 openclaw
+4. 你的 `~/.openclaw/` 配置保留不动
+
+> **注意：** 配置文件中加密的 API Key（`enc:v1:...`）上游 openclaw 无法识别，需要手动替换为明文。
+
 ## 其他功能
 
 openclaw 的所有功能（频道、技能、代理、工具、应用）完全正常使用。详见 [openclaw 文档](https://docs.openclaw.ai)。

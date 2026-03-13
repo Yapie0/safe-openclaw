@@ -322,6 +322,23 @@ The repo includes helper scripts for quick deployment:
 - `daemon.sh` — manage the gateway as a background process (`start`/`stop`/`restart`/`status`/`log`)
 - `installandrun.sh` — one-liner: install + start gateway in background
 
+## Uninstall safe-openclaw
+
+To remove safe-openclaw and restore upstream openclaw:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/uninstall.sh | bash
+```
+
+The uninstall script will:
+
+1. Stop the running gateway
+2. Uninstall the safe-openclaw npm package
+3. Install upstream openclaw
+4. Preserve your `~/.openclaw/` config
+
+> **Note:** Encrypted API keys (`enc:v1:...`) in config are not recognized by upstream openclaw. You will need to manually replace them with plaintext values.
+
 ## Everything else
 
 All other openclaw features (channels, skills, agents, tools, apps) work exactly the same. See the [openclaw docs](https://docs.openclaw.ai) for details.
