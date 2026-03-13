@@ -65,6 +65,34 @@ curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/s
 
 支持 Anthropic、OpenAI、Google Gemini、通义千问、DeepSeek、OpenRouter 等 10 种 Provider。详见下方[一键配置大模型 API](#一键配置大模型-api) 章节。
 
+### 配置消息通道（以 Telegram 为例）
+
+1. 在 Telegram 中找到 [@BotFather](https://t.me/BotFather)，发送 `/newbot`，按提示设置名称和 username，获得 Bot Token
+2. 编辑 `~/.openclaw/openclaw.json`，添加 `channels.telegram` 配置：
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "botToken": "123456789:AABBccDDeeFFggHH",
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
+    }
+  }
+}
+```
+
+配置说明：
+
+| 字段          | 说明                                                    |
+| ------------- | ------------------------------------------------------- |
+| `botToken`    | BotFather 给的 Bot Token                                |
+| `dmPolicy`    | `"open"` 允许所有人私聊，`"allowlist"` 仅允许白名单用户 |
+| `allowFrom`   | `["*"]` 允许所有人，或填 Telegram 用户 ID 数组限制访问  |
+| `groupPolicy` | 群组策略：`"open"` / `"allowlist"` / `"disabled"`       |
+
+> 其他支持的通道：Slack、Discord、WhatsApp、iMessage 等，配置方式类似，详见 [openclaw 文档](https://docs.openclaw.ai)。
+
 ### 启动网关
 
 ```bash

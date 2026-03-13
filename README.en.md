@@ -65,6 +65,32 @@ curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/s
 
 Supports Anthropic, OpenAI, Google Gemini, Qwen, DeepSeek, OpenRouter, and more. See [One-command model API setup](#one-command-model-api-setup) below.
 
+### Set up a messaging channel (Telegram example)
+
+1. Open [@BotFather](https://t.me/BotFather) in Telegram, send `/newbot`, follow the prompts to get a Bot Token
+2. Edit `~/.openclaw/openclaw.json` and add `channels.telegram`:
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "botToken": "123456789:AABBccDDeeFFggHH",
+      "dmPolicy": "open",
+      "allowFrom": ["*"]
+    }
+  }
+}
+```
+
+| Field         | Description                                                       |
+| ------------- | ----------------------------------------------------------------- |
+| `botToken`    | Bot Token from BotFather                                          |
+| `dmPolicy`    | `"open"` allows everyone, `"allowlist"` restricts to listed users |
+| `allowFrom`   | `["*"]` for everyone, or an array of Telegram user IDs            |
+| `groupPolicy` | Group policy: `"open"` / `"allowlist"` / `"disabled"`             |
+
+> Other supported channels: Slack, Discord, WhatsApp, iMessage, etc. See [openclaw docs](https://docs.openclaw.ai).
+
 ### Start the gateway
 
 ```bash
