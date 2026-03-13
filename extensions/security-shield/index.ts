@@ -8,8 +8,7 @@
  *
  * Works with all existing tools and extensions — no code changes required.
  */
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/security-shield";
-import { emptyPluginConfigSchema } from "openclaw/plugin-sdk/security-shield";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { writeAuditEntry, type AuditEntry } from "./src/audit-log.js";
 import { scanForDangerousCommands } from "./src/dangerous-commands.js";
 import { scanForLeaks, redactLeaks } from "./src/leak-detector.js";
@@ -33,7 +32,15 @@ const plugin = {
   name: "Security Shield",
   description:
     "Blocks dangerous tool commands, detects secret leaks in tool output, and logs all tool activity.",
-  configSchema: emptyPluginConfigSchema(),
+  configSchema: {
+    type: "object" as const,
+    additionalProperties: false,
+    properties: {
+      enforcement: { type: "string" as const, enum: ["block", "warn", "off"], default: "block" },
+      auditLog: { type: "boolean" as const, default: true },
+      leakDetection: { type: "boolean" as const, default: true },
+    },
+  },
 
   register(api: OpenClawPluginApi) {
     const config = resolveConfig(api.pluginConfig);
@@ -53,7 +60,6 @@ const plugin = {
       if (matches.length === 0) return;
 
       const criticals = matches.filter((m) => m.severity === "critical");
-      const warnings = matches.filter((m) => m.severity === "warn");
 
       // Log all findings
       for (const m of matches) {
@@ -65,12 +71,12 @@ const plugin = {
         }
       }
 
-      // Audit log
+      // Audit log (redact params to avoid writing secrets to disk)
       if (config.auditLog) {
         writeAuditEntry({
           timestamp: new Date().toISOString(),
           toolName: event.toolName,
-          params: paramsStr,
+          params: redactLeaks(paramsStr),
           blocked: config.enforcement === "block" && criticals.length > 0,
           blockReason:
             criticals.length > 0 ? criticals.map((m) => m.message).join("; ") : undefined,
@@ -97,7 +103,7 @@ const plugin = {
       const resultStr = event.result != null ? JSON.stringify(event.result) : "";
       const findings: AuditEntry["findings"] = [];
 
-      // Leak detection
+      // Leak detection + redaction of tool result
       if (config.leakDetection && resultStr.length > 0) {
         const leaks = scanForLeaks(resultStr);
 
@@ -111,15 +117,27 @@ const plugin = {
               message: leak.message,
             });
           }
+
+          // Redact secrets from the tool result before it reaches the LLM
+          if (typeof event.result === "string") {
+            event.result = redactLeaks(event.result);
+          } else if (event.result != null) {
+            const redacted = redactLeaks(JSON.stringify(event.result));
+            try {
+              event.result = JSON.parse(redacted);
+            } catch {
+              event.result = redacted;
+            }
+          }
         }
       }
 
-      // Audit log
+      // Audit log (redact params to avoid writing secrets to disk)
       if (config.auditLog) {
         writeAuditEntry({
           timestamp: new Date().toISOString(),
           toolName: event.toolName,
-          params: JSON.stringify(event.params ?? {}),
+          params: redactLeaks(JSON.stringify(event.params ?? {})),
           blocked: false,
           findings,
           durationMs: event.durationMs,
