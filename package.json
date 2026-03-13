@@ -212,6 +212,10 @@
       "types": "./dist/plugin-sdk/keyed-async-queue.d.ts",
       "default": "./dist/plugin-sdk/keyed-async-queue.js"
     },
+    "./plugin-sdk/security-shield": {
+      "types": "./dist/plugin-sdk/security-shield.d.ts",
+      "default": "./dist/plugin-sdk/security-shield.js"
+    },
     "./cli-entry": "./openclaw.mjs"
   },
   "scripts": {
