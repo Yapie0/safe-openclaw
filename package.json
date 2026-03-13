@@ -1,6 +1,6 @@
 {
   "name": "safe-openclaw",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Security-hardened fork of openclaw: mandatory password setup, strong password policy, 3-day session tokens",
   "keywords": [
     "ai",

@@ -103,17 +103,18 @@ nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 
 ## What's different
 
-| Feature                     | openclaw                  | safe-openclaw                                                    |
-| --------------------------- | ------------------------- | ---------------------------------------------------------------- |
-| First-time access           | No password required      | Must set a password before gateway opens                         |
-| Password storage            | Plaintext token in config | SHA-256 hashed with random salt                                  |
-| API token storage           | Plaintext in config       | AES-256-GCM encrypted with password-derived key                  |
-| Password strength           | None enforced             | 8+ chars, upper + lower + digit                                  |
-| Browser login               | Token in URL/localStorage | Password + signed session token (3-day expiry, HttpOnly cookie)  |
-| Remote access without setup | Allowed                   | Blocked (403)                                                    |
-| Password reset              | No dedicated flow         | Web UI + CLI (localhost only)                                    |
-| Secret leakage in chat      | No protection             | Outbound message redaction                                       |
-| Model API configuration     | Manually edit JSON config | One command: interactive setup, connection test, auto-encryption |
+| Feature                     | openclaw                             | safe-openclaw                                                    |
+| --------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| First-time access           | No password required                 | Must set a password before gateway opens                         |
+| Password storage            | Plaintext token in config            | SHA-256 hashed with random salt                                  |
+| API token storage           | Plaintext in config                  | AES-256-GCM encrypted with password-derived key                  |
+| Password strength           | None enforced                        | 8+ chars, upper + lower + digit                                  |
+| Browser login               | Token in URL/localStorage            | Password + signed session token (3-day expiry, HttpOnly cookie)  |
+| Remote access without setup | Allowed                              | Blocked (403)                                                    |
+| Password reset              | No dedicated flow                    | Web UI + CLI (localhost only)                                    |
+| Secret leakage in chat      | No protection                        | Outbound message redaction                                       |
+| Model API configuration     | Manually edit JSON config            | One command: interactive setup, connection test, auto-encryption |
+| Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host    |
 
 ## One-command model API setup
 
@@ -171,6 +172,78 @@ All password set/reset operations enforce: minimum 8 characters, at least one up
 ### 6. Auto-restart on password change
 
 When the password is changed via the web UI, the gateway detects the config change and triggers an automatic restart to apply the new encryption keys. The reset page includes a "Verify & continue" button that polls until the gateway is back online.
+
+## Docker isolated deployment (recommended for production)
+
+AI agents can execute code, invoke tools, and read/write files. openclaw applies no isolation to these operations — the AI has the same system privileges as you. A single malicious instruction could delete files, read private keys, or install a backdoor. Community extensions may also contain malicious code.
+
+**Docker deployment runs the entire gateway in an isolated container** — even if an extension contains malicious code, it cannot access sensitive files or system resources on the host.
+
+### Quick start
+
+```bash
+# 1. Build the image
+git clone https://github.com/Yapie0/safe-openclaw.git
+cd safe-openclaw
+docker build -t safe-openclaw .
+
+# 2. Create config and workspace directories
+mkdir -p ~/.openclaw ~/.openclaw/workspace
+
+# 3. Start the container
+docker run -d \
+  --name safe-openclaw \
+  --restart unless-stopped \
+  -p 18789:18789 \
+  -v ~/.openclaw:/home/node/.openclaw \
+  -v ~/.openclaw/workspace:/home/node/.openclaw/workspace \
+  safe-openclaw \
+  node openclaw.mjs gateway --bind lan --allow-unconfigured
+```
+
+Visit `http://localhost:18789` to set your password.
+
+### Using docker-compose
+
+```bash
+# Create .env file
+cat > .env << 'EOF'
+OPENCLAW_IMAGE=safe-openclaw
+OPENCLAW_CONFIG_DIR=~/.openclaw
+OPENCLAW_WORKSPACE_DIR=~/.openclaw/workspace
+OPENCLAW_GATEWAY_PORT=18789
+OPENCLAW_BRIDGE_PORT=18790
+OPENCLAW_GATEWAY_BIND=lan
+EOF
+
+# Start
+docker compose up -d openclaw-gateway
+```
+
+### Running CLI commands inside the container
+
+```bash
+# Set password
+docker exec -it safe-openclaw node openclaw.mjs set-password
+
+# Run doctor
+docker exec -it safe-openclaw node openclaw.mjs doctor
+
+# View logs
+docker logs -f safe-openclaw
+```
+
+### What Docker isolates
+
+| Threat                                  | Without Docker   | With Docker                    |
+| --------------------------------------- | ---------------- | ------------------------------ |
+| Malicious extension reads `~/.ssh`      | ⚠️ Can read      | ✅ Directory not in container  |
+| Malicious extension reads `/etc/passwd` | ⚠️ Can read      | ✅ Isolated filesystem         |
+| `rm -rf /` deletes system files         | ⚠️ Executes      | ✅ Only affects container      |
+| Malicious code installs backdoor        | ⚠️ Host infected | ✅ Destroyed with container    |
+| Stealing other process info             | ⚠️ Accessible    | ✅ Process namespace isolation |
+
+> **Note:** The container can read/write the mounted `~/.openclaw` directory. Do not mount `~/.ssh`, `~/.aws`, or other sensitive directories into the container.
 
 ## Migrating from openclaw
 

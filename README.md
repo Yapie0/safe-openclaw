@@ -105,17 +105,18 @@ nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 
 ## 和 openclaw 有什么不同
 
-| 功能               | openclaw                    | safe-openclaw                                    |
-| ------------------ | --------------------------- | ------------------------------------------------ |
-| 首次访问           | 无需密码                    | 必须先设置密码才能使用                           |
-| 密码存储           | 明文 token                  | SHA-256 哈希加盐存储                             |
-| API 密钥存储       | 明文存储在配置文件          | AES-256-GCM 加密，密钥由密码派生                 |
-| 密码强度           | 无要求                      | 至少 8 位，包含大小写字母和数字                  |
-| 浏览器登录         | URL/localStorage 中的 token | 密码 + 签名会话令牌（3 天过期，HttpOnly Cookie） |
-| 未设置时的远程访问 | 允许                        | 拒绝（403）                                      |
-| 密码重置           | 无专用流程                  | Web 界面 + 命令行（仅限本机）                    |
-| 聊天中的密钥泄露   | 无保护                      | 自动过滤敏感信息                                 |
-| 大模型 API 配置    | 手动编辑 JSON 配置文件      | 一条命令交互式配置，自动连接测试，自动加密存储   |
+| 功能               | openclaw                     | safe-openclaw                                    |
+| ------------------ | ---------------------------- | ------------------------------------------------ |
+| 首次访问           | 无需密码                     | 必须先设置密码才能使用                           |
+| 密码存储           | 明文 token                   | SHA-256 哈希加盐存储                             |
+| API 密钥存储       | 明文存储在配置文件           | AES-256-GCM 加密，密钥由密码派生                 |
+| 密码强度           | 无要求                       | 至少 8 位，包含大小写字母和数字                  |
+| 浏览器登录         | URL/localStorage 中的 token  | 密码 + 签名会话令牌（3 天过期，HttpOnly Cookie） |
+| 未设置时的远程访问 | 允许                         | 拒绝（403）                                      |
+| 密码重置           | 无专用流程                   | Web 界面 + 命令行（仅限本机）                    |
+| 聊天中的密钥泄露   | 无保护                       | 自动过滤敏感信息                                 |
+| 大模型 API 配置    | 手动编辑 JSON 配置文件       | 一条命令交互式配置，自动连接测试，自动加密存储   |
+| 运行环境隔离       | 无隔离，工具拥有完整系统权限 | Docker 容器隔离，恶意代码无法访问宿主机敏感文件  |
 
 ## 一键配置大模型 API
 
@@ -187,19 +188,77 @@ safe-openclaw：
 
 通过 Web 界面修改密码后，网关会检测到配置变更并自动触发重启以应用新的加密密钥。重置页面包含"验证并继续"按钮，会自动轮询直到网关恢复在线。
 
-## 正在开发中
+## Docker 隔离部署（推荐用于生产环境）
 
-### 沙箱隔离执行环境
+AI 代理可以执行代码、调用工具、读写文件。openclaw 对这些操作没有任何隔离——AI 拥有和你一样的系统权限，一条恶意指令就可能删除文件、读取私钥、安装后门。社区 extension 中也可能包含恶意代码。
 
-AI 代理可以执行代码、调用工具、读写文件。openclaw 对这些操作没有任何隔离——AI 拥有和你一样的系统权限，一条恶意指令就可能删除文件、读取私钥、安装后门。
+**Docker 部署将整个网关运行在隔离容器中**——即使 extension 有恶意代码，也无法访问宿主机的敏感文件和系统资源。
 
-safe-openclaw 正在开发沙箱功能：
+### 快速启动
 
-- **文件系统隔离**：AI 只能访问指定的工作目录，无法读取 `~/.ssh`、`~/.aws` 等敏感路径
-- **命令执行沙箱**：危险命令（`rm -rf`、`curl | bash`、`chmod 777`）在执行前拦截并需要用户确认
-- **网络访问控制**：限制 AI 发起的网络请求，防止数据外传到未知地址
-- **资源限制**：防止 AI 无限消耗 CPU、内存或磁盘空间
-- **操作审计日志**：记录 AI 的每一次文件操作、命令执行和网络请求，方便事后审查
+```bash
+# 1. 构建镜像
+git clone https://github.com/Yapie0/safe-openclaw.git
+cd safe-openclaw
+docker build -t safe-openclaw .
+
+# 2. 创建配置和工作目录
+mkdir -p ~/.openclaw ~/.openclaw/workspace
+
+# 3. 启动容器
+docker run -d \
+  --name safe-openclaw \
+  --restart unless-stopped \
+  -p 18789:18789 \
+  -v ~/.openclaw:/home/node/.openclaw \
+  -v ~/.openclaw/workspace:/home/node/.openclaw/workspace \
+  safe-openclaw \
+  node openclaw.mjs gateway --bind lan --allow-unconfigured
+```
+
+启动后访问 `http://localhost:18789` 设置密码。
+
+### 使用 docker-compose
+
+```bash
+# 创建 .env 文件
+cat > .env << 'EOF'
+OPENCLAW_IMAGE=safe-openclaw
+OPENCLAW_CONFIG_DIR=~/.openclaw
+OPENCLAW_WORKSPACE_DIR=~/.openclaw/workspace
+OPENCLAW_GATEWAY_PORT=18789
+OPENCLAW_BRIDGE_PORT=18790
+OPENCLAW_GATEWAY_BIND=lan
+EOF
+
+# 启动
+docker compose up -d openclaw-gateway
+```
+
+### 容器内执行 CLI 命令
+
+```bash
+# 设置密码
+docker exec -it safe-openclaw node openclaw.mjs set-password
+
+# 运行 doctor
+docker exec -it safe-openclaw node openclaw.mjs doctor
+
+# 查看日志
+docker logs -f safe-openclaw
+```
+
+### Docker 隔离了什么
+
+| 威胁                              | 无 Docker       | Docker 部署         |
+| --------------------------------- | --------------- | ------------------- |
+| 恶意 extension 读取 `~/.ssh`      | ⚠️ 可以读取     | ✅ 容器内无此目录   |
+| 恶意 extension 读取 `/etc/passwd` | ⚠️ 可以读取     | ✅ 隔离的文件系统   |
+| `rm -rf /` 删除系统文件           | ⚠️ 会执行       | ✅ 只影响容器内部   |
+| 恶意代码安装后门                  | ⚠️ 宿主机被感染 | ✅ 容器销毁即清除   |
+| 窃取其他进程信息                  | ⚠️ 可以访问     | ✅ 进程命名空间隔离 |
+
+> **注意：** 容器可以读写挂载的 `~/.openclaw` 目录。不要将 `~/.ssh`、`~/.aws` 等敏感目录挂载进容器。
 
 ## 忘记密码
 
