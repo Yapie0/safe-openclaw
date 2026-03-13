@@ -51,6 +51,8 @@ const plugin = {
     );
 
     // ── before_tool_call: block dangerous commands ──────────────
+    // Note: scans stringified params broadly. Only "critical" severity
+    // rules trigger blocking to reduce false positives from text fields.
     api.on("before_tool_call", (event) => {
       if (config.enforcement === "off") return;
 
@@ -101,6 +103,8 @@ const plugin = {
     // ── after_tool_call: log leaks + audit trail (observational) ─
     // Note: after_tool_call is fire-and-forget (void hook), so we cannot
     // modify event.result here. Actual redaction happens in message_sending.
+    // A future tool_result_persist hook would allow redaction before
+    // transcript storage — see openclaw hook docs for updates.
     api.on("after_tool_call", (event) => {
       const resultStr = event.result != null ? JSON.stringify(event.result) : "";
       const findings: AuditEntry["findings"] = [];
@@ -129,7 +133,7 @@ const plugin = {
           blocked: false,
           findings,
           durationMs: event.durationMs,
-          error: event.error,
+          error: event.error ? redactLeaks(event.error) : undefined,
         });
       }
     });
