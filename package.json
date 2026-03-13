@@ -110,6 +110,10 @@
       "types": "./dist/plugin-sdk/diffs.d.ts",
       "default": "./dist/plugin-sdk/diffs.js"
     },
+    "./plugin-sdk/security-shield": {
+      "types": "./dist/plugin-sdk/security-shield.d.ts",
+      "default": "./dist/plugin-sdk/security-shield.js"
+    },
     "./plugin-sdk/feishu": {
       "types": "./dist/plugin-sdk/feishu.d.ts",
       "default": "./dist/plugin-sdk/feishu.js"
