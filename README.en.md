@@ -154,6 +154,33 @@ Configure in `~/.openclaw/openclaw.json`:
 | `defaultAction` | Default action when no rule matches                             | `"allow"` |
 | `auditLog`      | Enable audit logging                                            | `true`    |
 
+### Subprocess Isolation
+
+When a tool call passes the policy check, Execution Isolation automatically wraps exec-type tool commands in a restricted subprocess:
+
+- **macOS**: `sandbox-exec` profiles to restrict filesystem and network access
+- **Linux**: `unshare` mount namespaces — denied paths are bind-mounted to `/dev/null`
+- **Cross-platform**: `timeout` for execution time limits + `ulimit` for file size limits
+
+Configuration example:
+
+```json
+{
+  "plugins": {
+    "execution-isolation": {
+      "resources": {
+        "timeoutMs": 30000,
+        "maxOutputBytes": 1048576
+      }
+    }
+  }
+}
+```
+
+### Architecture
+
+![safe-openclaw Security Architecture](docs/images/safe-openclaw-architecture-v2.png)
+
 > **Compatibility note:** Execution Isolation works at the tool execution layer without modifying OpenClaw's plugin interface, so it's fully compatible with existing Skill Hub skills.
 
 ## Docker isolated deployment (recommended for production)
