@@ -1,0 +1,13 @@
+{
+  "name": "@openclaw/execution-isolation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Execution isolation plugin: permission-based access control for tool calls with filesystem, network, and command policies",
+  "type": "module",
+  "dependencies": {},
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

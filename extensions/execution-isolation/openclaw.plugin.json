@@ -1,0 +1,66 @@
+{
+  "id": "execution-isolation",
+  "name": "Execution Isolation",
+  "description": "Permission-based access control for AI tool calls. Enforces filesystem, network, and command policies with audit logging.",
+  "skills": ["./skills"],
+  "uiHints": {
+    "enforcement": {
+      "label": "Enforcement Mode",
+      "help": "block = prevent execution, warn = log warning but allow, off = disable"
+    },
+    "defaultAction": {
+      "label": "Default Action",
+      "help": "allow = permit unless denied, deny = block unless explicitly allowed"
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enforcement": {
+        "type": "string",
+        "enum": ["block", "warn", "off"],
+        "default": "block"
+      },
+      "defaultAction": {
+        "type": "string",
+        "enum": ["allow", "deny"],
+        "default": "allow"
+      },
+      "auditLog": {
+        "type": "boolean",
+        "default": true
+      },
+      "filesystem": {
+        "type": "object",
+        "properties": {
+          "readAllow": { "type": "array", "items": { "type": "string" } },
+          "writeAllow": { "type": "array", "items": { "type": "string" } },
+          "deny": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "network": {
+        "type": "object",
+        "properties": {
+          "allow": { "type": "array", "items": { "type": "string" } },
+          "deny": { "type": "array", "items": { "type": "string" } },
+          "allowAll": { "type": "boolean" }
+        }
+      },
+      "commands": {
+        "type": "object",
+        "properties": {
+          "allow": { "type": "array", "items": { "type": "string" } },
+          "deny": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "resources": {
+        "type": "object",
+        "properties": {
+          "timeoutMs": { "type": "number" },
+          "maxOutputBytes": { "type": "number" }
+        }
+      }
+    }
+  }
+}
