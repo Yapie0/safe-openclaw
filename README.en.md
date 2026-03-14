@@ -12,6 +12,224 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
+## What's different
+
+| Feature                     | openclaw                             | safe-openclaw                                                            |
+| --------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| First-time access           | No password required                 | Must set a password before gateway opens                                 |
+| Password storage            | Plaintext token in config            | SHA-256 hashed with random salt                                          |
+| API token storage           | Plaintext in config                  | AES-256-GCM encrypted with password-derived key                          |
+| Password strength           | None enforced                        | 8+ chars, upper + lower + digit                                          |
+| Browser login               | Token in URL/localStorage            | Password + signed session token (3-day expiry, HttpOnly cookie)          |
+| Remote access without setup | Allowed                              | Blocked (403)                                                            |
+| Password reset              | No dedicated flow                    | Web UI + CLI (localhost only)                                            |
+| Secret leakage in chat      | No protection                        | Outbound message redaction                                               |
+| Model API configuration     | Manually edit JSON config            | One command: interactive setup, connection test, auto-encryption         |
+| Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host            |
+| Tool call safety            | No protection                        | Security Shield: dangerous command blocking + leak detection + audit log |
+| Tool execution isolation    | No protection                        | Execution Isolation: filesystem/network/command allowlist policies       |
+
+## Security patches
+
+### 1. Mandatory password auth gate
+
+openclaw generates a random token on first run but never forces the user to set a password. safe-openclaw adds a server-side HTTP auth gate that intercepts **all** requests before they reach the gateway. The gateway is fully locked (403 for remote clients) until a password is set.
+
+- First visit redirects to `/setup` (localhost only)
+- Unauthenticated browser requests get the login page
+- API requests without a valid token receive 401
+- WebSocket connections are also gated by session token
+
+### 2. Password hashing + API token encryption
+
+openclaw stores the auth token and all model API keys in **plaintext** in `~/.openclaw/openclaw.json`.
+
+safe-openclaw:
+
+- Hashes passwords with **SHA-256** (random salt): `sha256:<salt>:<hash>`
+- Encrypts all model API tokens with **AES-256-GCM** using a password-derived key: `aes256gcm:<iv>:<authTag>:<ciphertext>`
+- Re-encrypts all tokens when the password changes
+
+### 3. Secret redaction in outbound messages
+
+The AI assistant might accidentally echo API keys or passwords in chat responses. safe-openclaw scans all outbound messages and replaces known secret patterns with `**********` before delivery to any channel.
+
+### 4. Password strength enforcement
+
+All password set/reset operations enforce: minimum 8 characters, at least one uppercase, one lowercase, and one digit.
+
+### 5. Localhost-only sensitive endpoints
+
+`/setup`, `/reset-password`, and `/api/safe/reset-password` check the request origin via direct socket address inspection and return 403 for any non-localhost request.
+
+### 6. Auto-restart on password change
+
+When the password is changed via the web UI, the gateway detects the config change and triggers an automatic restart to apply the new encryption keys. The reset page includes a "Verify & continue" button that polls until the gateway is back online.
+
+## Security Shield Plugin (built-in)
+
+safe-openclaw ships with a built-in **Security Shield** plugin that provides real-time security protection for AI tool calls:
+
+### Dangerous Command Blocking
+
+Automatically detects and blocks high-risk operations: `rm -rf /`, `curl|bash` pipe execution, reverse shells, and more. All tool call parameters are scanned before execution — critical-severity matches are blocked immediately.
+
+### Secret Leak Detection
+
+Scans tool output and outbound messages for sensitive patterns (API keys, tokens, private keys, etc.) and replaces them with `**********`, preventing the AI from accidentally leaking secrets in conversations.
+
+### Audit Logging
+
+All tool calls are logged to an audit trail, including tool name, parameters (redacted), execution result, block status and reason — enabling post-incident security review.
+
+### Configuration
+
+Configure in `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "security-shield": {
+      "enforcement": "block",
+      "auditLog": true,
+      "leakDetection": true
+    }
+  }
+}
+```
+
+| Option          | Description                                                     | Default   |
+| --------------- | --------------------------------------------------------------- | --------- |
+| `enforcement`   | `"block"` to block / `"warn"` to warn only / `"off"` to disable | `"block"` |
+| `auditLog`      | Enable audit logging                                            | `true`    |
+| `leakDetection` | Enable secret leak detection                                    | `true`    |
+
+## Execution Isolation Plugin (built-in)
+
+The **Execution Isolation** plugin provides policy-based access control for AI tool calls, complementing Security Shield — Shield catches pattern-based attacks, Isolation enforces structural access control via allowlists/denylists.
+
+### Filesystem Policy
+
+Controls which paths the AI can read/write. Deny rules take precedence over allow rules. Supports `~` expansion and path traversal protection.
+
+### Network Policy
+
+Controls which domains the AI can access. Supports wildcard matching (e.g., `*.github.com`), preventing data exfiltration to unauthorized servers.
+
+### Command Policy
+
+Controls which commands the AI can execute. Automatically detects `sh -c`, `bash -c` wrappers and `env` prefixes, extracting the real command for matching.
+
+### Configuration
+
+Configure in `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "execution-isolation": {
+      "enforcement": "block",
+      "defaultAction": "allow",
+      "filesystem": {
+        "readAllow": ["~/workspace", "/tmp", "~/.openclaw"],
+        "writeAllow": ["~/workspace", "/tmp"],
+        "deny": ["~/.ssh", "~/.aws", "~/.gnupg"]
+      },
+      "network": {
+        "allow": ["api.openai.com", "api.anthropic.com", "*.github.com"],
+        "deny": ["10.*", "192.168.*"]
+      },
+      "commands": {
+        "allow": ["node", "python", "git", "pnpm", "npm", "curl"],
+        "deny": ["sudo", "chmod", "chown"]
+      }
+    }
+  }
+}
+```
+
+| Option          | Description                                                     | Default   |
+| --------------- | --------------------------------------------------------------- | --------- |
+| `enforcement`   | `"block"` to block / `"warn"` to warn only / `"off"` to disable | `"block"` |
+| `defaultAction` | Default action when no rule matches                             | `"allow"` |
+| `auditLog`      | Enable audit logging                                            | `true`    |
+
+> **Compatibility note:** Execution Isolation works at the tool execution layer without modifying OpenClaw's plugin interface, so it's fully compatible with existing Skill Hub skills.
+
+## Docker isolated deployment (recommended for production)
+
+AI agents can execute code, invoke tools, and read/write files. openclaw applies no isolation to these operations — the AI has the same system privileges as you. A single malicious instruction could delete files, read private keys, or install a backdoor. Community extensions may also contain malicious code.
+
+**Docker deployment runs the entire gateway in an isolated container** — even if an extension contains malicious code, it cannot access sensitive files or system resources on the host.
+
+### Quick start
+
+```bash
+# 1. Build the image
+git clone https://github.com/Yapie0/safe-openclaw.git
+cd safe-openclaw
+docker build -t safe-openclaw .
+
+# 2. Create config and workspace directories
+mkdir -p ~/.openclaw ~/.openclaw/workspace
+
+# 3. Start the container
+docker run -d \
+  --name safe-openclaw \
+  --restart unless-stopped \
+  -p 18789:18789 \
+  -v ~/.openclaw:/home/node/.openclaw \
+  -v ~/.openclaw/workspace:/home/node/.openclaw/workspace \
+  safe-openclaw \
+  node openclaw.mjs gateway --bind lan --allow-unconfigured
+```
+
+Visit `http://localhost:18789` to set your password.
+
+### Using docker-compose
+
+```bash
+# Create .env file
+cat > .env << 'EOF'
+OPENCLAW_IMAGE=safe-openclaw
+OPENCLAW_CONFIG_DIR=~/.openclaw
+OPENCLAW_WORKSPACE_DIR=~/.openclaw/workspace
+OPENCLAW_GATEWAY_PORT=18789
+OPENCLAW_BRIDGE_PORT=18790
+OPENCLAW_GATEWAY_BIND=lan
+EOF
+
+# Start
+docker compose up -d openclaw-gateway
+```
+
+### Running CLI commands inside the container
+
+```bash
+# Set password
+docker exec -it safe-openclaw node openclaw.mjs set-password
+
+# Run doctor
+docker exec -it safe-openclaw node openclaw.mjs doctor
+
+# View logs
+docker logs -f safe-openclaw
+```
+
+### What Docker isolates
+
+| Threat                                  | Without Docker   | With Docker                    |
+| --------------------------------------- | ---------------- | ------------------------------ |
+| Malicious extension reads `~/.ssh`      | ⚠️ Can read      | ✅ Directory not in container  |
+| Malicious extension reads `/etc/passwd` | ⚠️ Can read      | ✅ Isolated filesystem         |
+| `rm -rf /` deletes system files         | ⚠️ Executes      | ✅ Only affects container      |
+| Malicious code installs backdoor        | ⚠️ Host infected | ✅ Destroyed with container    |
+| Stealing other process info             | ⚠️ Accessible    | ✅ Process namespace isolation |
+
+> **Note:** The container can read/write the mounted `~/.openclaw` directory. Do not mount `~/.ssh`, `~/.aws`, or other sensitive directories into the container.
+
+---
+
 ## Already running openclaw? One command to patch it
 
 No need to uninstall anything. The installer checks your Node.js environment and detects your existing openclaw, upgrades it in place with all security patches — your config, sessions, and channels are preserved:
@@ -101,60 +319,6 @@ openclaw gateway run
 nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 ```
 
-## What's different
-
-| Feature                     | openclaw                             | safe-openclaw                                                            |
-| --------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
-| First-time access           | No password required                 | Must set a password before gateway opens                                 |
-| Password storage            | Plaintext token in config            | SHA-256 hashed with random salt                                          |
-| API token storage           | Plaintext in config                  | AES-256-GCM encrypted with password-derived key                          |
-| Password strength           | None enforced                        | 8+ chars, upper + lower + digit                                          |
-| Browser login               | Token in URL/localStorage            | Password + signed session token (3-day expiry, HttpOnly cookie)          |
-| Remote access without setup | Allowed                              | Blocked (403)                                                            |
-| Password reset              | No dedicated flow                    | Web UI + CLI (localhost only)                                            |
-| Secret leakage in chat      | No protection                        | Outbound message redaction                                               |
-| Model API configuration     | Manually edit JSON config            | One command: interactive setup, connection test, auto-encryption         |
-| Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host            |
-| Tool call safety            | No protection                        | Security Shield: dangerous command blocking + leak detection + audit log |
-
-## Security Shield Plugin (built-in)
-
-safe-openclaw ships with a built-in **Security Shield** plugin that provides real-time security protection for AI tool calls:
-
-### Dangerous Command Blocking
-
-Automatically detects and blocks high-risk operations: `rm -rf /`, `curl|bash` pipe execution, reverse shells, and more. All tool call parameters are scanned before execution — critical-severity matches are blocked immediately.
-
-### Secret Leak Detection
-
-Scans tool output and outbound messages for sensitive patterns (API keys, tokens, private keys, etc.) and replaces them with `**********`, preventing the AI from accidentally leaking secrets in conversations.
-
-### Audit Logging
-
-All tool calls are logged to an audit trail, including tool name, parameters (redacted), execution result, block status and reason — enabling post-incident security review.
-
-### Configuration
-
-Configure in `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "plugins": {
-    "security-shield": {
-      "enforcement": "block",
-      "auditLog": true,
-      "leakDetection": true
-    }
-  }
-}
-```
-
-| Option          | Description                                                     | Default   |
-| --------------- | --------------------------------------------------------------- | --------- |
-| `enforcement`   | `"block"` to block / `"warn"` to warn only / `"off"` to disable | `"block"` |
-| `auditLog`      | Enable audit logging                                            | `true`    |
-| `leakDetection` | Enable secret leak detection                                    | `true`    |
-
 ## One-command model API setup
 
 After installing and setting a password, configure any model's API key with a single command — interactive provider selection, automatic connection test with a real `hello` message, and AES-256-GCM encrypted storage:
@@ -174,115 +338,6 @@ The script will:
 5. Write `models.providers` config and set it as the default model
 
 Run it multiple times to configure different providers. Custom Base URLs are supported for proxies and mirrors.
-
-## Security patches
-
-### 1. Mandatory password auth gate
-
-openclaw generates a random token on first run but never forces the user to set a password. safe-openclaw adds a server-side HTTP auth gate that intercepts **all** requests before they reach the gateway. The gateway is fully locked (403 for remote clients) until a password is set.
-
-- First visit redirects to `/setup` (localhost only)
-- Unauthenticated browser requests get the login page
-- API requests without a valid token receive 401
-- WebSocket connections are also gated by session token
-
-### 2. Password hashing + API token encryption
-
-openclaw stores the auth token and all model API keys in **plaintext** in `~/.openclaw/openclaw.json`.
-
-safe-openclaw:
-
-- Hashes passwords with **SHA-256** (random salt): `sha256:<salt>:<hash>`
-- Encrypts all model API tokens with **AES-256-GCM** using a password-derived key: `aes256gcm:<iv>:<authTag>:<ciphertext>`
-- Re-encrypts all tokens when the password changes
-
-### 3. Secret redaction in outbound messages
-
-The AI assistant might accidentally echo API keys or passwords in chat responses. safe-openclaw scans all outbound messages and replaces known secret patterns with `**********` before delivery to any channel.
-
-### 4. Password strength enforcement
-
-All password set/reset operations enforce: minimum 8 characters, at least one uppercase, one lowercase, and one digit.
-
-### 5. Localhost-only sensitive endpoints
-
-`/setup`, `/reset-password`, and `/api/safe/reset-password` check the request origin via direct socket address inspection and return 403 for any non-localhost request.
-
-### 6. Auto-restart on password change
-
-When the password is changed via the web UI, the gateway detects the config change and triggers an automatic restart to apply the new encryption keys. The reset page includes a "Verify & continue" button that polls until the gateway is back online.
-
-## Docker isolated deployment (recommended for production)
-
-AI agents can execute code, invoke tools, and read/write files. openclaw applies no isolation to these operations — the AI has the same system privileges as you. A single malicious instruction could delete files, read private keys, or install a backdoor. Community extensions may also contain malicious code.
-
-**Docker deployment runs the entire gateway in an isolated container** — even if an extension contains malicious code, it cannot access sensitive files or system resources on the host.
-
-### Quick start
-
-```bash
-# 1. Build the image
-git clone https://github.com/Yapie0/safe-openclaw.git
-cd safe-openclaw
-docker build -t safe-openclaw .
-
-# 2. Create config and workspace directories
-mkdir -p ~/.openclaw ~/.openclaw/workspace
-
-# 3. Start the container
-docker run -d \
-  --name safe-openclaw \
-  --restart unless-stopped \
-  -p 18789:18789 \
-  -v ~/.openclaw:/home/node/.openclaw \
-  -v ~/.openclaw/workspace:/home/node/.openclaw/workspace \
-  safe-openclaw \
-  node openclaw.mjs gateway --bind lan --allow-unconfigured
-```
-
-Visit `http://localhost:18789` to set your password.
-
-### Using docker-compose
-
-```bash
-# Create .env file
-cat > .env << 'EOF'
-OPENCLAW_IMAGE=safe-openclaw
-OPENCLAW_CONFIG_DIR=~/.openclaw
-OPENCLAW_WORKSPACE_DIR=~/.openclaw/workspace
-OPENCLAW_GATEWAY_PORT=18789
-OPENCLAW_BRIDGE_PORT=18790
-OPENCLAW_GATEWAY_BIND=lan
-EOF
-
-# Start
-docker compose up -d openclaw-gateway
-```
-
-### Running CLI commands inside the container
-
-```bash
-# Set password
-docker exec -it safe-openclaw node openclaw.mjs set-password
-
-# Run doctor
-docker exec -it safe-openclaw node openclaw.mjs doctor
-
-# View logs
-docker logs -f safe-openclaw
-```
-
-### What Docker isolates
-
-| Threat                                  | Without Docker   | With Docker                    |
-| --------------------------------------- | ---------------- | ------------------------------ |
-| Malicious extension reads `~/.ssh`      | ⚠️ Can read      | ✅ Directory not in container  |
-| Malicious extension reads `/etc/passwd` | ⚠️ Can read      | ✅ Isolated filesystem         |
-| `rm -rf /` deletes system files         | ⚠️ Executes      | ✅ Only affects container      |
-| Malicious code installs backdoor        | ⚠️ Host infected | ✅ Destroyed with container    |
-| Stealing other process info             | ⚠️ Accessible    | ✅ Process namespace isolation |
-
-> **Note:** The container can read/write the mounted `~/.openclaw` directory. Do not mount `~/.ssh`, `~/.aws`, or other sensitive directories into the container.
 
 ## Migrating from openclaw
 

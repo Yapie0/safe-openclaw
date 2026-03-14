@@ -12,6 +12,224 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
 </p>
 
+## 和 openclaw 有什么不同
+
+| 功能               | openclaw                     | safe-openclaw                                           |
+| ------------------ | ---------------------------- | ------------------------------------------------------- |
+| 首次访问           | 无需密码                     | 必须先设置密码才能使用                                  |
+| 密码存储           | 明文 token                   | SHA-256 哈希加盐存储                                    |
+| API 密钥存储       | 明文存储在配置文件           | AES-256-GCM 加密，密钥由密码派生                        |
+| 密码强度           | 无要求                       | 至少 8 位，包含大小写字母和数字                         |
+| 浏览器登录         | URL/localStorage 中的 token  | 密码 + 签名会话令牌（3 天过期，HttpOnly Cookie）        |
+| 未设置时的远程访问 | 允许                         | 拒绝（403）                                             |
+| 密码重置           | 无专用流程                   | Web 界面 + 命令行（仅限本机）                           |
+| 聊天中的密钥泄露   | 无保护                       | 自动过滤敏感信息                                        |
+| 大模型 API 配置    | 手动编辑 JSON 配置文件       | 一条命令交互式配置，自动连接测试，自动加密存储          |
+| 运行环境隔离       | 无隔离，工具拥有完整系统权限 | Docker 容器隔离，恶意代码无法访问宿主机敏感文件         |
+| 工具调用安全       | 无防护                       | Security Shield：危险命令拦截 + 密钥泄露检测 + 审计日志 |
+| 工具执行隔离       | 无防护                       | Execution Isolation：文件/网络/命令白名单策略           |
+
+## 安全补丁详情
+
+### 1. 强制密码认证网关（解决公网裸奔问题）
+
+openclaw 首次运行时生成一个随机 token，但从不强制用户设置密码。safe-openclaw 添加了服务端 HTTP 认证网关，在请求到达网关之前拦截**所有**请求。在密码设置完成之前，网关完全锁定（远程请求返回 403）。
+
+- 首次访问自动跳转到 `/setup`（仅限本机访问）
+- 未认证的浏览器请求展示登录页面
+- 未携带有效 token 的 API 请求返回 401
+- WebSocket 连接同样受会话令牌保护
+
+### 2. 密码哈希 + API 密钥加密
+
+openclaw 将认证 token 和所有大模型 API 密钥以**明文**存储在 `~/.openclaw/openclaw.json` 中。
+
+safe-openclaw：
+
+- 使用 **SHA-256** 对密码进行哈希加盐存储
+- 使用 **AES-256-GCM** 加密所有大模型 API 密钥，加密密钥由密码派生
+- 修改密码时自动重新加密所有密钥
+
+### 3. 聊天消息敏感信息过滤
+
+双重防护：即使 API 密钥已加密存储，safe-openclaw 仍会扫描所有发出的消息，匹配已知的敏感信息模式并替换为 `**********`，防止任何形式的密钥泄露。在最极端的情况下，即使攻击者绕过了所有防护，拿到的也只是加密后的密文，而非明文密钥。
+
+### 4. 密码强度要求
+
+所有密码设置/重置操作强制要求：至少 8 个字符，包含大写字母、小写字母和数字。
+
+### 5. 敏感接口仅限本机访问
+
+`/setup`、`/reset-password` 和 `/api/safe/reset-password` 通过检查请求来源的 socket 地址来验证是否来自本机，非本机请求返回 403。
+
+### 6. 修改密码后自动重启
+
+通过 Web 界面修改密码后，网关会检测到配置变更并自动触发重启以应用新的加密密钥。重置页面包含"验证并继续"按钮，会自动轮询直到网关恢复在线。
+
+## Security Shield 插件（内置）
+
+safe-openclaw 内置了 **Security Shield** 插件，为 AI 工具调用提供实时安全防护：
+
+### 危险命令拦截
+
+自动检测并阻止高危操作：`rm -rf /`、`curl|bash` 管道执行、反向 Shell 等。所有工具调用参数在执行前经过安全扫描，critical 级别的匹配会直接拦截。
+
+### 密钥泄露检测
+
+扫描工具输出和外发消息中的敏感信息模式（API Key、Token、私钥等），自动替换为 `**********`，防止 AI 在对话中意外泄露密钥。
+
+### 审计日志
+
+所有工具调用自动记录到审计日志，包括工具名称、参数（已脱敏）、执行结果、是否被拦截及拦截原因，便于事后安全审查。
+
+### 配置
+
+在 `~/.openclaw/openclaw.json` 中配置：
+
+```json
+{
+  "plugins": {
+    "security-shield": {
+      "enforcement": "block",
+      "auditLog": true,
+      "leakDetection": true
+    }
+  }
+}
+```
+
+| 选项            | 说明                                            | 默认值    |
+| --------------- | ----------------------------------------------- | --------- |
+| `enforcement`   | `"block"` 拦截 / `"warn"` 仅告警 / `"off"` 关闭 | `"block"` |
+| `auditLog`      | 是否记录审计日志                                | `true`    |
+| `leakDetection` | 是否检测密钥泄露                                | `true`    |
+
+## Execution Isolation 插件（内置）
+
+**Execution Isolation** 插件为 AI 工具调用提供基于策略的访问控制，与 Security Shield 互补——Shield 通过正则模式拦截已知攻击，Isolation 通过白名单/黑名单控制结构化权限。
+
+### 文件系统策略
+
+控制 AI 可以读写哪些路径。黑名单优先于白名单，支持 `~` 展开和路径穿越防护。
+
+### 网络出口策略
+
+控制 AI 可以访问哪些域名。支持通配符匹配（如 `*.github.com`），防止数据外泄到未授权服务器。
+
+### 命令执行策略
+
+控制 AI 可以执行哪些命令。自动识别 `sh -c`、`bash -c` 包装和 `env` 前缀，提取真实命令进行匹配。
+
+### 配置
+
+在 `~/.openclaw/openclaw.json` 中配置：
+
+```json
+{
+  "plugins": {
+    "execution-isolation": {
+      "enforcement": "block",
+      "defaultAction": "allow",
+      "filesystem": {
+        "readAllow": ["~/workspace", "/tmp", "~/.openclaw"],
+        "writeAllow": ["~/workspace", "/tmp"],
+        "deny": ["~/.ssh", "~/.aws", "~/.gnupg"]
+      },
+      "network": {
+        "allow": ["api.openai.com", "api.anthropic.com", "*.github.com"],
+        "deny": ["10.*", "192.168.*"]
+      },
+      "commands": {
+        "allow": ["node", "python", "git", "pnpm", "npm", "curl"],
+        "deny": ["sudo", "chmod", "chown"]
+      }
+    }
+  }
+}
+```
+
+| 选项            | 说明                                            | 默认值    |
+| --------------- | ----------------------------------------------- | --------- |
+| `enforcement`   | `"block"` 拦截 / `"warn"` 仅告警 / `"off"` 关闭 | `"block"` |
+| `defaultAction` | 无规则匹配时的默认行为                          | `"allow"` |
+| `auditLog`      | 是否记录审计日志                                | `true`    |
+
+> **兼容性说明：** Execution Isolation 工作在工具执行层，不修改 OpenClaw 的插件接口，因此与 Skill Hub 现有技能完全兼容。
+
+## Docker 隔离部署（推荐用于生产环境）
+
+AI 代理可以执行代码、调用工具、读写文件。openclaw 对这些操作没有任何隔离——AI 拥有和你一样的系统权限，一条恶意指令就可能删除文件、读取私钥、安装后门。社区 extension 中也可能包含恶意代码。
+
+**Docker 部署将整个网关运行在隔离容器中**——即使 extension 有恶意代码，也无法访问宿主机的敏感文件和系统资源。
+
+### 快速启动
+
+```bash
+# 1. 构建镜像
+git clone https://github.com/Yapie0/safe-openclaw.git
+cd safe-openclaw
+docker build -t safe-openclaw .
+
+# 2. 创建配置和工作目录
+mkdir -p ~/.openclaw ~/.openclaw/workspace
+
+# 3. 启动容器
+docker run -d \
+  --name safe-openclaw \
+  --restart unless-stopped \
+  -p 18789:18789 \
+  -v ~/.openclaw:/home/node/.openclaw \
+  -v ~/.openclaw/workspace:/home/node/.openclaw/workspace \
+  safe-openclaw \
+  node openclaw.mjs gateway --bind lan --allow-unconfigured
+```
+
+启动后访问 `http://localhost:18789` 设置密码。
+
+### 使用 docker-compose
+
+```bash
+# 创建 .env 文件
+cat > .env << 'EOF'
+OPENCLAW_IMAGE=safe-openclaw
+OPENCLAW_CONFIG_DIR=~/.openclaw
+OPENCLAW_WORKSPACE_DIR=~/.openclaw/workspace
+OPENCLAW_GATEWAY_PORT=18789
+OPENCLAW_BRIDGE_PORT=18790
+OPENCLAW_GATEWAY_BIND=lan
+EOF
+
+# 启动
+docker compose up -d openclaw-gateway
+```
+
+### 容器内执行 CLI 命令
+
+```bash
+# 设置密码
+docker exec -it safe-openclaw node openclaw.mjs set-password
+
+# 运行 doctor
+docker exec -it safe-openclaw node openclaw.mjs doctor
+
+# 查看日志
+docker logs -f safe-openclaw
+```
+
+### Docker 隔离了什么
+
+| 威胁                              | 无 Docker       | Docker 部署         |
+| --------------------------------- | --------------- | ------------------- |
+| 恶意 extension 读取 `~/.ssh`      | ⚠️ 可以读取     | ✅ 容器内无此目录   |
+| 恶意 extension 读取 `/etc/passwd` | ⚠️ 可以读取     | ✅ 隔离的文件系统   |
+| `rm -rf /` 删除系统文件           | ⚠️ 会执行       | ✅ 只影响容器内部   |
+| 恶意代码安装后门                  | ⚠️ 宿主机被感染 | ✅ 容器销毁即清除   |
+| 窃取其他进程信息                  | ⚠️ 可以访问     | ✅ 进程命名空间隔离 |
+
+> **注意：** 容器可以读写挂载的 `~/.openclaw` 目录。不要将 `~/.ssh`、`~/.aws` 等敏感目录挂载进容器。
+
+---
+
 ## 已经在用 openclaw？一条命令完成安全升级
 
 不需要卸载任何东西。安装脚本会自动检测 Node.js 环境和已有的 openclaw，原地替换并应用所有安全补丁——你的配置、会话、频道全部保留：
@@ -103,60 +321,6 @@ openclaw gateway run
 nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 ```
 
-## 和 openclaw 有什么不同
-
-| 功能               | openclaw                     | safe-openclaw                                           |
-| ------------------ | ---------------------------- | ------------------------------------------------------- |
-| 首次访问           | 无需密码                     | 必须先设置密码才能使用                                  |
-| 密码存储           | 明文 token                   | SHA-256 哈希加盐存储                                    |
-| API 密钥存储       | 明文存储在配置文件           | AES-256-GCM 加密，密钥由密码派生                        |
-| 密码强度           | 无要求                       | 至少 8 位，包含大小写字母和数字                         |
-| 浏览器登录         | URL/localStorage 中的 token  | 密码 + 签名会话令牌（3 天过期，HttpOnly Cookie）        |
-| 未设置时的远程访问 | 允许                         | 拒绝（403）                                             |
-| 密码重置           | 无专用流程                   | Web 界面 + 命令行（仅限本机）                           |
-| 聊天中的密钥泄露   | 无保护                       | 自动过滤敏感信息                                        |
-| 大模型 API 配置    | 手动编辑 JSON 配置文件       | 一条命令交互式配置，自动连接测试，自动加密存储          |
-| 运行环境隔离       | 无隔离，工具拥有完整系统权限 | Docker 容器隔离，恶意代码无法访问宿主机敏感文件         |
-| 工具调用安全       | 无防护                       | Security Shield：危险命令拦截 + 密钥泄露检测 + 审计日志 |
-
-## Security Shield 插件（内置）
-
-safe-openclaw 内置了 **Security Shield** 插件，为 AI 工具调用提供实时安全防护：
-
-### 危险命令拦截
-
-自动检测并阻止高危操作：`rm -rf /`、`curl|bash` 管道执行、反向 Shell 等。所有工具调用参数在执行前经过安全扫描，critical 级别的匹配会直接拦截。
-
-### 密钥泄露检测
-
-扫描工具输出和外发消息中的敏感信息模式（API Key、Token、私钥等），自动替换为 `**********`，防止 AI 在对话中意外泄露密钥。
-
-### 审计日志
-
-所有工具调用自动记录到审计日志，包括工具名称、参数（已脱敏）、执行结果、是否被拦截及拦截原因，便于事后安全审查。
-
-### 配置
-
-在 `~/.openclaw/openclaw.json` 中配置：
-
-```json
-{
-  "plugins": {
-    "security-shield": {
-      "enforcement": "block",
-      "auditLog": true,
-      "leakDetection": true
-    }
-  }
-}
-```
-
-| 选项            | 说明                                            | 默认值    |
-| --------------- | ----------------------------------------------- | --------- |
-| `enforcement`   | `"block"` 拦截 / `"warn"` 仅告警 / `"off"` 关闭 | `"block"` |
-| `auditLog`      | 是否记录审计日志                                | `true`    |
-| `leakDetection` | 是否检测密钥泄露                                | `true`    |
-
 ## 一键配置大模型 API
 
 安装完成、设好密码后，一条命令即可配置任意大模型的 API Key——交互式选择 provider，自动发送测试消息验证连通性，API Key 自动 AES-256-GCM 加密存储：
@@ -189,115 +353,6 @@ curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/scripts/s
 5. 自动配置 `models.providers`，设置为默认模型
 
 可以多次运行来配置不同的 Provider。Base URL 支持自定义，方便接入国内镜像或代理。
-
-## 安全补丁详情
-
-### 1. 强制密码认证网关（解决公网裸奔问题）
-
-openclaw 首次运行时生成一个随机 token，但从不强制用户设置密码。safe-openclaw 添加了服务端 HTTP 认证网关，在请求到达网关之前拦截**所有**请求。在密码设置完成之前，网关完全锁定（远程请求返回 403）。
-
-- 首次访问自动跳转到 `/setup`（仅限本机访问）
-- 未认证的浏览器请求展示登录页面
-- 未携带有效 token 的 API 请求返回 401
-- WebSocket 连接同样受会话令牌保护
-
-### 2. 密码哈希 + API 密钥加密
-
-openclaw 将认证 token 和所有大模型 API 密钥以**明文**存储在 `~/.openclaw/openclaw.json` 中。
-
-safe-openclaw：
-
-- 使用 **SHA-256** 对密码进行哈希加盐存储
-- 使用 **AES-256-GCM** 加密所有大模型 API 密钥，加密密钥由密码派生
-- 修改密码时自动重新加密所有密钥
-
-### 3. 聊天消息敏感信息过滤
-
-双重防护：即使 API 密钥已加密存储，safe-openclaw 仍会扫描所有发出的消息，匹配已知的敏感信息模式并替换为 `**********`，防止任何形式的密钥泄露。在最极端的情况下，即使攻击者绕过了所有防护，拿到的也只是加密后的密文，而非明文密钥。
-
-### 4. 密码强度要求
-
-所有密码设置/重置操作强制要求：至少 8 个字符，包含大写字母、小写字母和数字。
-
-### 5. 敏感接口仅限本机访问
-
-`/setup`、`/reset-password` 和 `/api/safe/reset-password` 通过检查请求来源的 socket 地址来验证是否来自本机，非本机请求返回 403。
-
-### 6. 修改密码后自动重启
-
-通过 Web 界面修改密码后，网关会检测到配置变更并自动触发重启以应用新的加密密钥。重置页面包含"验证并继续"按钮，会自动轮询直到网关恢复在线。
-
-## Docker 隔离部署（推荐用于生产环境）
-
-AI 代理可以执行代码、调用工具、读写文件。openclaw 对这些操作没有任何隔离——AI 拥有和你一样的系统权限，一条恶意指令就可能删除文件、读取私钥、安装后门。社区 extension 中也可能包含恶意代码。
-
-**Docker 部署将整个网关运行在隔离容器中**——即使 extension 有恶意代码，也无法访问宿主机的敏感文件和系统资源。
-
-### 快速启动
-
-```bash
-# 1. 构建镜像
-git clone https://github.com/Yapie0/safe-openclaw.git
-cd safe-openclaw
-docker build -t safe-openclaw .
-
-# 2. 创建配置和工作目录
-mkdir -p ~/.openclaw ~/.openclaw/workspace
-
-# 3. 启动容器
-docker run -d \
-  --name safe-openclaw \
-  --restart unless-stopped \
-  -p 18789:18789 \
-  -v ~/.openclaw:/home/node/.openclaw \
-  -v ~/.openclaw/workspace:/home/node/.openclaw/workspace \
-  safe-openclaw \
-  node openclaw.mjs gateway --bind lan --allow-unconfigured
-```
-
-启动后访问 `http://localhost:18789` 设置密码。
-
-### 使用 docker-compose
-
-```bash
-# 创建 .env 文件
-cat > .env << 'EOF'
-OPENCLAW_IMAGE=safe-openclaw
-OPENCLAW_CONFIG_DIR=~/.openclaw
-OPENCLAW_WORKSPACE_DIR=~/.openclaw/workspace
-OPENCLAW_GATEWAY_PORT=18789
-OPENCLAW_BRIDGE_PORT=18790
-OPENCLAW_GATEWAY_BIND=lan
-EOF
-
-# 启动
-docker compose up -d openclaw-gateway
-```
-
-### 容器内执行 CLI 命令
-
-```bash
-# 设置密码
-docker exec -it safe-openclaw node openclaw.mjs set-password
-
-# 运行 doctor
-docker exec -it safe-openclaw node openclaw.mjs doctor
-
-# 查看日志
-docker logs -f safe-openclaw
-```
-
-### Docker 隔离了什么
-
-| 威胁                              | 无 Docker       | Docker 部署         |
-| --------------------------------- | --------------- | ------------------- |
-| 恶意 extension 读取 `~/.ssh`      | ⚠️ 可以读取     | ✅ 容器内无此目录   |
-| 恶意 extension 读取 `/etc/passwd` | ⚠️ 可以读取     | ✅ 隔离的文件系统   |
-| `rm -rf /` 删除系统文件           | ⚠️ 会执行       | ✅ 只影响容器内部   |
-| 恶意代码安装后门                  | ⚠️ 宿主机被感染 | ✅ 容器销毁即清除   |
-| 窃取其他进程信息                  | ⚠️ 可以访问     | ✅ 进程命名空间隔离 |
-
-> **注意：** 容器可以读写挂载的 `~/.openclaw` 目录。不要将 `~/.ssh`、`~/.aws` 等敏感目录挂载进容器。
 
 ## 忘记密码
 
