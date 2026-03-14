@@ -103,18 +103,57 @@ nohup openclaw gateway run > /tmp/openclaw-gateway.log 2>&1 &
 
 ## What's different
 
-| Feature                     | openclaw                             | safe-openclaw                                                    |
-| --------------------------- | ------------------------------------ | ---------------------------------------------------------------- |
-| First-time access           | No password required                 | Must set a password before gateway opens                         |
-| Password storage            | Plaintext token in config            | SHA-256 hashed with random salt                                  |
-| API token storage           | Plaintext in config                  | AES-256-GCM encrypted with password-derived key                  |
-| Password strength           | None enforced                        | 8+ chars, upper + lower + digit                                  |
-| Browser login               | Token in URL/localStorage            | Password + signed session token (3-day expiry, HttpOnly cookie)  |
-| Remote access without setup | Allowed                              | Blocked (403)                                                    |
-| Password reset              | No dedicated flow                    | Web UI + CLI (localhost only)                                    |
-| Secret leakage in chat      | No protection                        | Outbound message redaction                                       |
-| Model API configuration     | Manually edit JSON config            | One command: interactive setup, connection test, auto-encryption |
-| Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host    |
+| Feature                     | openclaw                             | safe-openclaw                                                            |
+| --------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| First-time access           | No password required                 | Must set a password before gateway opens                                 |
+| Password storage            | Plaintext token in config            | SHA-256 hashed with random salt                                          |
+| API token storage           | Plaintext in config                  | AES-256-GCM encrypted with password-derived key                          |
+| Password strength           | None enforced                        | 8+ chars, upper + lower + digit                                          |
+| Browser login               | Token in URL/localStorage            | Password + signed session token (3-day expiry, HttpOnly cookie)          |
+| Remote access without setup | Allowed                              | Blocked (403)                                                            |
+| Password reset              | No dedicated flow                    | Web UI + CLI (localhost only)                                            |
+| Secret leakage in chat      | No protection                        | Outbound message redaction                                               |
+| Model API configuration     | Manually edit JSON config            | One command: interactive setup, connection test, auto-encryption         |
+| Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host            |
+| Tool call safety            | No protection                        | Security Shield: dangerous command blocking + leak detection + audit log |
+
+## Security Shield Plugin (built-in)
+
+safe-openclaw ships with a built-in **Security Shield** plugin that provides real-time security protection for AI tool calls:
+
+### Dangerous Command Blocking
+
+Automatically detects and blocks high-risk operations: `rm -rf /`, `curl|bash` pipe execution, reverse shells, and more. All tool call parameters are scanned before execution — critical-severity matches are blocked immediately.
+
+### Secret Leak Detection
+
+Scans tool output and outbound messages for sensitive patterns (API keys, tokens, private keys, etc.) and replaces them with `**********`, preventing the AI from accidentally leaking secrets in conversations.
+
+### Audit Logging
+
+All tool calls are logged to an audit trail, including tool name, parameters (redacted), execution result, block status and reason — enabling post-incident security review.
+
+### Configuration
+
+Configure in `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "security-shield": {
+      "enforcement": "block",
+      "auditLog": true,
+      "leakDetection": true
+    }
+  }
+}
+```
+
+| Option          | Description                                                     | Default   |
+| --------------- | --------------------------------------------------------------- | --------- |
+| `enforcement`   | `"block"` to block / `"warn"` to warn only / `"off"` to disable | `"block"` |
+| `auditLog`      | Enable audit logging                                            | `true`    |
+| `leakDetection` | Enable secret leak detection                                    | `true`    |
 
 ## One-command model API setup
 
