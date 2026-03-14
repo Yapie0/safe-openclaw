@@ -36,7 +36,49 @@
 
 ## Security patches
 
-### 1. Mandatory password auth gate
+### 1. Subprocess Sandboxing (OS-level isolation)
+
+Every command executed by an AI agent is a potential attack vector. safe-openclaw automatically wraps tool commands in restricted subprocesses — **even if the AI is tricked into running malicious instructions, the sandbox blocks access to sensitive files and networks**.
+
+**macOS (sandbox-exec):**
+
+- Auto-generates sandbox-exec profiles to restrict filesystem read/write and network access
+- In deny-default mode, only whitelisted paths are accessible (system paths like `/usr`, `/bin`, `/tmp` are auto-allowed)
+- Denied paths (e.g., `~/.ssh`, `~/.aws`) are completely inaccessible
+
+**Linux (namespace isolation):**
+
+- Uses `unshare --mount --fork` to create isolated mount namespaces
+- Denied paths are hidden via `mount --bind /dev/null`
+- Processes run in an isolated filesystem view with no visibility into protected directories
+
+**Cross-platform resource limits:**
+
+- `timeout` enforces execution time limits (prevents infinite loops or hangs)
+- `ulimit -f` limits output file size (prevents disk-fill attacks)
+
+```json
+{
+  "plugins": {
+    "execution-isolation": {
+      "defaultAction": "deny",
+      "filesystem": {
+        "readAllow": ["~/workspace", "/tmp"],
+        "writeAllow": ["~/workspace", "/tmp"],
+        "deny": ["~/.ssh", "~/.aws", "~/.gnupg", "~/.openclaw"]
+      },
+      "resources": {
+        "timeoutMs": 30000,
+        "maxOutputBytes": 1048576
+      }
+    }
+  }
+}
+```
+
+> Subprocess sandboxing works together with the Execution Isolation policy engine: the policy engine checks whether a tool call is permitted, then the sandbox wraps the actual command for **defense in depth**.
+
+### 2. Mandatory password auth gate
 
 openclaw generates a random token on first run but never forces the user to set a password. safe-openclaw adds a server-side HTTP auth gate that intercepts **all** requests before they reach the gateway. The gateway is fully locked (403 for remote clients) until a password is set.
 
@@ -45,7 +87,7 @@ openclaw generates a random token on first run but never forces the user to set 
 - API requests without a valid token receive 401
 - WebSocket connections are also gated by session token
 
-### 2. Password hashing + API token encryption
+### 3. Password hashing + API token encryption
 
 openclaw stores the auth token and all model API keys in **plaintext** in `~/.openclaw/openclaw.json`.
 
@@ -55,19 +97,19 @@ safe-openclaw:
 - Encrypts all model API tokens with **AES-256-GCM** using a password-derived key: `aes256gcm:<iv>:<authTag>:<ciphertext>`
 - Re-encrypts all tokens when the password changes
 
-### 3. Secret redaction in outbound messages
+### 4. Secret redaction in outbound messages
 
 The AI assistant might accidentally echo API keys or passwords in chat responses. safe-openclaw scans all outbound messages and replaces known secret patterns with `**********` before delivery to any channel.
 
-### 4. Password strength enforcement
+### 5. Password strength enforcement
 
 All password set/reset operations enforce: minimum 8 characters, at least one uppercase, one lowercase, and one digit.
 
-### 5. Localhost-only sensitive endpoints
+### 6. Localhost-only sensitive endpoints
 
 `/setup`, `/reset-password`, and `/api/safe/reset-password` check the request origin via direct socket address inspection and return 403 for any non-localhost request.
 
-### 6. Auto-restart on password change
+### 7. Auto-restart on password change
 
 When the password is changed via the web UI, the gateway detects the config change and triggers an automatic restart to apply the new encryption keys. The reset page includes a "Verify & continue" button that polls until the gateway is back online.
 
@@ -159,30 +201,7 @@ Configure in `~/.openclaw/openclaw.json`:
 | `defaultAction` | Default action when no rule matches                             | `"allow"` |
 | `auditLog`      | Enable audit logging                                            | `true`    |
 
-### Subprocess Isolation
-
-When a tool call passes the policy check, Execution Isolation automatically wraps exec-type tool commands in a restricted subprocess:
-
-- **macOS**: `sandbox-exec` profiles to restrict filesystem and network access
-- **Linux**: `unshare` mount namespaces — denied paths are bind-mounted to `/dev/null`
-- **Cross-platform**: `timeout` for execution time limits + `ulimit` for file size limits
-
-Configuration example:
-
-```json
-{
-  "plugins": {
-    "execution-isolation": {
-      "resources": {
-        "timeoutMs": 30000,
-        "maxOutputBytes": 1048576
-      }
-    }
-  }
-}
-```
-
-> **Compatibility note:** Execution Isolation works at the tool execution layer without modifying OpenClaw's plugin interface, so it's fully compatible with existing Skill Hub skills.
+> **Compatibility note:** Execution Isolation works with subprocess sandboxing — after policy checks pass, commands are automatically wrapped in OS-level sandboxes. It operates at the tool execution layer without modifying OpenClaw's plugin interface, fully compatible with existing Skill Hub skills.
 
 ## Docker isolated deployment (recommended for production)
 
