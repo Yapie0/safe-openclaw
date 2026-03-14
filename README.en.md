@@ -16,6 +16,7 @@
 
 | Feature                     | openclaw                             | safe-openclaw                                                            |
 | --------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| Subprocess sandboxing       | No protection                        | OS-level sandbox: macOS sandbox-exec / Linux namespace isolation         |
 | First-time access           | No password required                 | Must set a password before gateway opens                                 |
 | Password storage            | Plaintext token in config            | SHA-256 hashed with random salt                                          |
 | API token storage           | Plaintext in config                  | AES-256-GCM encrypted with password-derived key                          |
@@ -28,7 +29,6 @@
 | Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host            |
 | Tool call safety            | No protection                        | Security Shield: dangerous command blocking + leak detection + audit log |
 | Tool execution isolation    | No protection                        | Execution Isolation: filesystem/network/command allowlist policies       |
-| Subprocess sandboxing       | No protection                        | OS-level sandbox: macOS sandbox-exec / Linux namespace isolation         |
 
 ### Architecture
 
