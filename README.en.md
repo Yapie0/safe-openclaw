@@ -28,6 +28,11 @@
 | Runtime isolation           | None — tools have full system access | Docker container isolation, malicious code cannot access host            |
 | Tool call safety            | No protection                        | Security Shield: dangerous command blocking + leak detection + audit log |
 | Tool execution isolation    | No protection                        | Execution Isolation: filesystem/network/command allowlist policies       |
+| Subprocess sandboxing       | No protection                        | OS-level sandbox: macOS sandbox-exec / Linux namespace isolation         |
+
+### Architecture
+
+![safe-openclaw Security Architecture](docs/images/safe-openclaw-architecture-v2.png)
 
 ## Security patches
 
@@ -176,10 +181,6 @@ Configuration example:
   }
 }
 ```
-
-### Architecture
-
-![safe-openclaw Security Architecture](docs/images/safe-openclaw-architecture-v2.png)
 
 > **Compatibility note:** Execution Isolation works at the tool execution layer without modifying OpenClaw's plugin interface, so it's fully compatible with existing Skill Hub skills.
 
