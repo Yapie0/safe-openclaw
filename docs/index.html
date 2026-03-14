@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>safe-openclaw — Security-Hardened OpenClaw</title>
+  <meta name="description" content="safe-openclaw adds mandatory authentication, AES-256 encryption, session management, and secret redaction to OpenClaw. Drop-in replacement with zero migration cost.">
+  <meta name="keywords" content="safe-openclaw, openclaw, ai gateway, security, authentication, AES-256, encryption, self-hosted, api gateway, cli">
+  <meta name="author" content="Yapie0">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="safe-openclaw — Security-Hardened OpenClaw">
+  <meta property="og:description" content="Mandatory auth gateway, AES-256 key encryption, session management, and secret redaction for OpenClaw. Drop-in replacement.">
+  <meta property="og:url" content="https://yapie0.github.io/safe-openclaw/">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="safe-openclaw — Security-Hardened OpenClaw">
+  <meta name="twitter:description" content="Mandatory auth gateway, AES-256 key encryption, session management, and secret redaction for OpenClaw.">
+
+  <link rel="canonical" href="https://yapie0.github.io/safe-openclaw/">
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.6;
+      color: #1a1a2e;
+      background: #f8f9fa;
+    }
+    .hero {
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #fff;
+      padding: 80px 20px;
+      text-align: center;
+    }
+    .hero h1 { font-size: 2.8rem; margin-bottom: 16px; }
+    .hero p { font-size: 1.2rem; max-width: 680px; margin: 0 auto 32px; opacity: 0.9; }
+    .badges { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .badges a img { height: 28px; }
+    .container { max-width: 900px; margin: 0 auto; padding: 60px 20px; }
+    h2 { font-size: 1.6rem; margin-bottom: 20px; color: #302b63; }
+    .problem {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 20px 24px;
+      border-radius: 6px;
+      margin-bottom: 40px;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .feature {
+      background: #fff;
+      border-radius: 10px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .feature h3 { font-size: 1.1rem; margin-bottom: 8px; color: #302b63; }
+    .install {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      border-radius: 10px;
+      padding: 24px 28px;
+      margin-bottom: 40px;
+      overflow-x: auto;
+    }
+    .install code { color: #7ef07e; font-size: 1rem; }
+    .links { text-align: center; margin-top: 40px; }
+    .links a {
+      display: inline-block;
+      margin: 8px 12px;
+      padding: 12px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+    .btn-primary { background: #302b63; color: #fff; }
+    .btn-secondary { background: #fff; color: #302b63; border: 2px solid #302b63; }
+    footer {
+      text-align: center;
+      padding: 30px;
+      color: #888;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <section class="hero">
+    <h1>safe-openclaw</h1>
+    <p>Security-hardened OpenClaw with mandatory authentication, AES-256 encryption, session management, and secret redaction. Drop-in replacement, zero migration cost.</p>
+    <div class="badges">
+      <a href="https://github.com/Yapie0/safe-openclaw/releases"><img src="https://img.shields.io/github/v/release/Yapie0/safe-openclaw?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
+      <a href="https://www.npmjs.com/package/safe-openclaw"><img src="https://img.shields.io/npm/v/safe-openclaw?style=for-the-badge&color=cb3837" alt="npm version"></a>
+      <a href="https://github.com/Yapie0/safe-openclaw/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+    </div>
+  </section>
+
+  <div class="container">
+
+    <div class="problem">
+      <h2>The Problem</h2>
+      <p>OpenClaw ships with <strong>zero authentication</strong> and stores API keys in <strong>plaintext</strong>. Deploy it on a server and anyone who discovers your URL owns your AI gateway — and every API key in it.</p>
+    </div>
+
+    <h2>What safe-openclaw Adds</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>Mandatory Auth Gateway</h3>
+        <p>Password-protected access with strong password policy enforcement. No anonymous access possible.</p>
+      </div>
+      <div class="feature">
+        <h3>AES-256-GCM Encryption</h3>
+        <p>API tokens encrypted at rest with AES-256-GCM. Keys are never stored in plaintext.</p>
+      </div>
+      <div class="feature">
+        <h3>Session Management</h3>
+        <p>HMAC-based session tokens with configurable expiry. Auto-restart on password change.</p>
+      </div>
+      <div class="feature">
+        <h3>Secret Redaction</h3>
+        <p>Automatic filtering of sensitive information in outbound messages and logs.</p>
+      </div>
+      <div class="feature">
+        <h3>Localhost-Only Endpoints</h3>
+        <p>Sensitive management endpoints restricted to localhost access only.</p>
+      </div>
+      <div class="feature">
+        <h3>Drop-in Replacement</h3>
+        <p>One command to upgrade. Your config, sessions, and channels are fully preserved.</p>
+      </div>
+    </div>
+
+    <h2>Install</h2>
+    <div class="install">
+      <code>curl -fsSL https://raw.githubusercontent.com/Yapie0/safe-openclaw/main/install.sh | bash</code>
+    </div>
+    <p>Or install via npm:</p>
+    <div class="install">
+      <code>npm install -g safe-openclaw</code>
+    </div>
+
+    <div class="links">
+      <a href="https://github.com/Yapie0/safe-openclaw" class="btn-primary">GitHub</a>
+      <a href="https://www.npmjs.com/package/safe-openclaw" class="btn-secondary">npm</a>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>safe-openclaw is open-source under the MIT License.</p>
+  </footer>
+
+</body>
+</html>
