@@ -14,6 +14,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { writeAuditEntry } from "./src/audit.js";
 import { evaluateToolCall } from "./src/policy-engine.js";
 import type { IsolationPolicy } from "./src/policy-types.js";
+import { wrapCommand } from "./src/restricted-executor.js";
 
 type IsolationConfig = {
   enforcement: "block" | "warn" | "off";
@@ -61,6 +62,14 @@ function redactParams(params: Record<string, unknown>): string {
     }
   }
   return JSON.stringify(redacted);
+}
+
+/** Tool names that execute shell commands and can be wrapped. */
+const EXEC_TOOL_NAMES = new Set(["exec", "bash", "shell", "terminal", "run"]);
+
+function isExecTool(toolName: string): boolean {
+  const lower = toolName.toLowerCase();
+  return EXEC_TOOL_NAMES.has(lower) || lower.includes("exec") || lower.includes("bash");
 }
 
 const plugin = {
@@ -134,6 +143,18 @@ const plugin = {
           block: true,
           blockReason: `🔒 Execution Isolation blocked this tool call:\n${reasons}\n\nIf this is intentional, adjust the isolation policy or ask the user to confirm.`,
         };
+      }
+
+      // ── Subprocess isolation: wrap exec commands with OS-level restrictions ──
+      if (isExecTool(event.toolName) && event.params?.command) {
+        const originalCommand = String(event.params.command);
+        const { wrappedCommand, restrictions } = wrapCommand(originalCommand, policy);
+        if (restrictions.length > 0) {
+          logger.info(
+            `[Execution Isolation] Wrapping command with restrictions: ${restrictions.join(", ")}`,
+          );
+          return { params: { ...event.params, command: wrappedCommand } };
+        }
       }
     });
 
