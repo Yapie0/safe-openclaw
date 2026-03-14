@@ -176,7 +176,7 @@ Configure in `~/.openclaw/openclaw.json`:
   "plugins": {
     "execution-isolation": {
       "enforcement": "block",
-      "defaultAction": "allow",
+      "defaultAction": "deny",
       "filesystem": {
         "readAllow": ["~/workspace", "/tmp", "~/.openclaw"],
         "writeAllow": ["~/workspace", "/tmp"],
@@ -198,7 +198,7 @@ Configure in `~/.openclaw/openclaw.json`:
 | Option          | Description                                                     | Default   |
 | --------------- | --------------------------------------------------------------- | --------- |
 | `enforcement`   | `"block"` to block / `"warn"` to warn only / `"off"` to disable | `"block"` |
-| `defaultAction` | Default action when no rule matches                             | `"allow"` |
+| `defaultAction` | Default action when no rule matches                             | `"deny"`  |
 | `auditLog`      | Enable audit logging                                            | `true`    |
 
 > **Compatibility note:** Execution Isolation works with subprocess sandboxing — after policy checks pass, commands are automatically wrapped in OS-level sandboxes. It operates at the tool execution layer without modifying OpenClaw's plugin interface, fully compatible with existing Skill Hub skills.

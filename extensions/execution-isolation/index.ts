@@ -30,7 +30,7 @@ type IsolationConfig = {
 function resolveConfig(raw?: Record<string, unknown>): IsolationConfig {
   return {
     enforcement: (raw?.enforcement as IsolationConfig["enforcement"]) ?? "block",
-    defaultAction: (raw?.defaultAction as IsolationConfig["defaultAction"]) ?? "allow",
+    defaultAction: (raw?.defaultAction as IsolationConfig["defaultAction"]) ?? "deny",
     auditLog: raw?.auditLog !== false,
     filesystem: raw?.filesystem as IsolationConfig["filesystem"],
     network: raw?.network as IsolationConfig["network"],
@@ -82,7 +82,7 @@ const plugin = {
     additionalProperties: false,
     properties: {
       enforcement: { type: "string" as const, enum: ["block", "warn", "off"], default: "block" },
-      defaultAction: { type: "string" as const, enum: ["allow", "deny"], default: "allow" },
+      defaultAction: { type: "string" as const, enum: ["allow", "deny"], default: "deny" },
       auditLog: { type: "boolean" as const, default: true },
       filesystem: { type: "object" as const },
       network: { type: "object" as const },

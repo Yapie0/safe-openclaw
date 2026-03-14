@@ -25,7 +25,7 @@
       "defaultAction": {
         "type": "string",
         "enum": ["allow", "deny"],
-        "default": "allow"
+        "default": "deny"
       },
       "auditLog": {
         "type": "boolean",
