@@ -85,6 +85,32 @@ const RULES: Rule[] = [
     pattern: /\b(curl|wget)\s.*\|\s*(bash|sh|zsh|dash|sudo)\b/,
   },
   {
+    id: "download-then-exec",
+    severity: "critical",
+    message: "Download followed by execution (staged attack)",
+    pattern:
+      /\b(curl|wget)\s.*(-o|--output|>)\s*\S+.*&&\s*(bash|sh|zsh|\.\/|source|python[3]?|node|perl)\b/,
+  },
+  {
+    id: "download-chmod-exec",
+    severity: "critical",
+    message: "Download + chmod + execute pattern detected",
+    pattern: /\b(curl|wget)\b.*&&.*\bchmod\b.*\+x/,
+  },
+  {
+    id: "python-url-exec",
+    severity: "critical",
+    message: "Python downloading and executing remote code",
+    pattern:
+      /\bpython[3]?\s+-c\s.*\b(urllib|requests|urlopen|urlretrieve)\b.*\b(exec|eval|subprocess|os\.system)\b/,
+  },
+  {
+    id: "curl-write-exec",
+    severity: "critical",
+    message: "Downloading to file then executing it",
+    pattern: /\b(curl|wget)\b.*;\s*(bash|sh|zsh|python|node|perl|\.\/)\s/,
+  },
+  {
     id: "eval-exec",
     severity: "warn",
     message: "Dynamic code execution in shell",
