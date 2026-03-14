@@ -201,6 +201,8 @@ Configure in `~/.openclaw/openclaw.json`:
 | `defaultAction` | Default action when no rule matches                             | `"deny"`  |
 | `auditLog`      | Enable audit logging                                            | `true`    |
 
+> **Built-in allowlists:** Major AI APIs (OpenAI, Anthropic, Google, DeepSeek, etc.), dev tools (git, node, python, curl, etc.), and common services (GitHub, npm, Notion, Slack, etc.) are allowed by default. Dangerous commands (sudo, dd, mkfs, etc.) are hardcoded as denied. Popular Skill Hub skills work out of the box without extra configuration.
+>
 > **Compatibility note:** Execution Isolation works with subprocess sandboxing — after policy checks pass, commands are automatically wrapped in OS-level sandboxes. It operates at the tool execution layer without modifying OpenClaw's plugin interface, fully compatible with existing Skill Hub skills.
 
 ## Docker isolated deployment (recommended for production)

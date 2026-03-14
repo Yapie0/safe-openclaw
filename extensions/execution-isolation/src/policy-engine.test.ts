@@ -65,12 +65,25 @@ describe("evaluateToolCall", () => {
       ...basePolicy,
       toolOverrides: {
         special_tool: {
+          commands: { allow: ["mycustomcmd"] },
+        },
+      },
+    };
+    const result = evaluateToolCall("special_tool", { command: "mycustomcmd --flag" }, policy);
+    expect(result.allowed).toBe(true);
+  });
+
+  it("denies sudo even with tool override (builtin deny)", () => {
+    const policy: IsolationPolicy = {
+      ...basePolicy,
+      toolOverrides: {
+        special_tool: {
           commands: { allow: ["sudo"] },
         },
       },
     };
     const result = evaluateToolCall("special_tool", { command: "sudo whoami" }, policy);
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
   });
 
   it("denies when any sub-evaluation denies", () => {
@@ -90,8 +103,22 @@ describe("evaluateToolCall", () => {
       defaultAction: "deny",
       commands: { allow: ["git"] },
     };
-    const result = evaluateToolCall("shell", { command: "wget http://evil.com" }, denyPolicy);
+    // "obscurecmd" is not in builtin allow list, so it should be denied
+    const result = evaluateToolCall("shell", { command: "obscurecmd --evil" }, denyPolicy);
     expect(result.allowed).toBe(false);
+  });
+
+  it("allows builtin-allowed commands in deny-default mode", () => {
+    const denyPolicy: IsolationPolicy = {
+      defaultAction: "deny",
+      commands: { allow: [] },
+    };
+    const result = evaluateToolCall(
+      "shell",
+      { command: "curl https://api.github.com" },
+      denyPolicy,
+    );
+    expect(result.allowed).toBe(true);
   });
 });
 

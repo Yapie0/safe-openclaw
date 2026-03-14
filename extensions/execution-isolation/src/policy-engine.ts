@@ -1,3 +1,8 @@
+import {
+  BUILTIN_COMMANDS_ALLOW,
+  BUILTIN_COMMANDS_DENY,
+  BUILTIN_NETWORK_ALLOW,
+} from "./builtin-allowlist.js";
 import { matchesCommandPolicy, extractCommands } from "./command-policy.js";
 import { matchesNetworkPolicy, extractUrls } from "./network-policy.js";
 import { matchesPathPolicy, extractPaths } from "./path-matcher.js";
@@ -17,8 +22,8 @@ export function evaluateToolCall(
   params: Record<string, unknown>,
   policy: IsolationPolicy,
 ): EngineResult {
-  // Merge tool-specific overrides
-  const effective = mergeToolOverrides(policy, toolName);
+  // Merge built-in allowlists and tool-specific overrides
+  const effective = applyBuiltinAllowlists(mergeToolOverrides(policy, toolName));
   const defaultAction = effective.defaultAction;
   const evaluations: PolicyEvaluation[] = [];
 
@@ -76,6 +81,33 @@ function mergeToolOverrides(policy: IsolationPolicy, toolName: string): Isolatio
     commands: override.commands ?? policy.commands,
     resources: override.resources ?? policy.resources,
   };
+}
+
+/**
+ * Merge built-in trusted allowlists into the policy.
+ * User deny rules still take precedence over built-in allows.
+ */
+function applyBuiltinAllowlists(policy: IsolationPolicy): IsolationPolicy {
+  return {
+    ...policy,
+    network: policy.network
+      ? {
+          ...policy.network,
+          allow: dedup([...BUILTIN_NETWORK_ALLOW, ...(policy.network.allow ?? [])]),
+        }
+      : { allow: BUILTIN_NETWORK_ALLOW },
+    commands: policy.commands
+      ? {
+          ...policy.commands,
+          allow: dedup([...BUILTIN_COMMANDS_ALLOW, ...(policy.commands.allow ?? [])]),
+          deny: dedup([...BUILTIN_COMMANDS_DENY, ...(policy.commands.deny ?? [])]),
+        }
+      : { allow: BUILTIN_COMMANDS_ALLOW, deny: BUILTIN_COMMANDS_DENY },
+  };
+}
+
+function dedup(arr: string[]): string[] {
+  return [...new Set(arr)];
 }
 
 /** Heuristic: is this tool call likely a write operation? */
